@@ -112,6 +112,16 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
+      - name: Bootstrap server (idempotent)
+        # Piped over SSH stdin and run as root every deploy — the script
+        # checks each prerequisite (service user, directories, Node 22,
+        # nginx/ufw, pm2 + boot unit) and no-ops when already provisioned, so
+        # this is a fast pass-through on an already-bootstrapped server.
+        run: |
+          SSH_OPTS="-i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts -p $SSH_PORT"
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" "sudo bash -s" \
+            < deploy/scripts/bootstrap.sh
+
       - name: Upload artifacts and config
         run: |
           SSH_OPTS="-i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts -p $SSH_PORT"

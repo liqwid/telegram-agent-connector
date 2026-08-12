@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Bootstrap folded into the pipeline.** `deploy/scripts/bootstrap.sh` is now
+  fully idempotent (guards on the `tac` user, directories, Node 22, apt
+  packages, pm2 boot unit; `apt-get update` only when something actually needs
+  installing) and the deploy workflow pipes it over SSH as root on every run —
+  a fresh server provisions itself on first deploy, an existing one passes
+  through in seconds. Manual setup shrinks to: SSH access, origin TLS cert,
+  DNS, Doppler tokens.
+
 - **Telegram app credentials moved to backend configuration.** `TELEGRAM_API_ID`
   and `TELEGRAM_API_HASH` are now deployment-level env secrets (Doppler
   `tac-backend/prd`, `.env` locally) — one Telegram application per deployment.

@@ -64,18 +64,25 @@ The entire `tac-backend/prd` config is exported verbatim to
 re-running the workflow is all it takes. Keep values single-line (the env file
 is parsed literally after `=`).
 
-## One-time server setup
+## Server setup
 
-1. Fresh Debian/Ubuntu box: `sudo bash deploy/scripts/bootstrap.sh`
-   (creates the `tac` service user, `/opt/tac`, `/etc/tac`, installs Node 22,
-   nginx, ufw, pm2 + boot unit).
-2. Give the CI deploy user passwordless sudo, e.g. as root:
-   `echo 'deploy ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/deploy` (or scope it
+Provisioning is part of the pipeline: the workflow pipes
+`deploy/scripts/bootstrap.sh` over SSH and runs it as root on **every deploy**.
+The script is idempotent — it checks each prerequisite (the `tac` service user,
+`/opt/tac` + `/etc/tac`, Node 22, nginx, ufw, pm2 + boot unit) and creates it
+only when missing, so on an already-provisioned server it's a fast no-op. A
+fresh Debian/Ubuntu box needs no manual preparation beyond SSH access; you can
+also run it by hand: `sudo bash deploy/scripts/bootstrap.sh`.
+
+What remains manual (one-time):
+
+1. An SSH user for CI: either `root`, or a user with passwordless sudo
+   (`echo 'deploy ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/deploy`, or scoped
    to the commands used in the scripts).
-3. Provision the Cloudflare Origin CA certificate at `/etc/tac/tls/`.
-4. Point a **proxied** Cloudflare DNS record at the server; set that URL as
+2. Provision the Cloudflare Origin CA certificate at `/etc/tac/tls/`.
+3. Point a **proxied** Cloudflare DNS record at the server; set that URL as
    `PUBLIC_BASE_URL` in `tac-backend/prd`.
-5. Create the two Doppler service tokens and add them as GitHub repo secrets.
+4. Create the two Doppler service tokens and add them as GitHub repo secrets.
 
 Then every push to `main` touching `backend/`, `common/` or `deploy/` deploys —
 or run the workflow manually via **workflow_dispatch**.
