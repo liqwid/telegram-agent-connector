@@ -59,6 +59,11 @@ jobs:
           }
           mask_and_export SSH_HOST "$(get_secret SSH_HOST)"
           mask_and_export SSH_USER "$(get_secret SSH_USER)"
+          # TLS provisioning (optional): with these set, bootstrap issues and
+          # renews a Let's Encrypt cert via the Cloudflare DNS-01 challenge.
+          mask_and_export CLOUDFLARE_API_TOKEN "$(get_secret CLOUDFLARE_API_TOKEN)"
+          printf 'TLS_DOMAIN=%s\n' "$(get_secret TLS_DOMAIN)" >> "$GITHUB_ENV"
+          printf 'LETSENCRYPT_EMAIL=%s\n' "$(get_secret LETSENCRYPT_EMAIL)" >> "$GITHUB_ENV"
           ssh_port="$(get_secret SSH_PORT)"
           printf 'SSH_PORT=%s\n' "${ssh_port:-22}" >> "$GITHUB_ENV"
           # SSH_PRIVATE_KEY is only presence-checked here; the Configure SSH
@@ -115,11 +120,13 @@ jobs:
       - name: Bootstrap server (idempotent)
         # Piped over SSH stdin and run as root every deploy — the script
         # checks each prerequisite (service user, directories, Node 22,
-        # nginx/ufw, pm2 + boot unit) and no-ops when already provisioned, so
-        # this is a fast pass-through on an already-bootstrapped server.
+        # nginx/ufw, pm2 + boot unit, TLS certificate + renewal cron) and
+        # no-ops when already provisioned, so this is a fast pass-through on
+        # an already-bootstrapped server.
         run: |
           SSH_OPTS="-i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts -p $SSH_PORT"
-          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" "sudo bash -s" \
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "sudo TLS_DOMAIN='$TLS_DOMAIN' CLOUDFLARE_API_TOKEN='$CLOUDFLARE_API_TOKEN' LETSENCRYPT_EMAIL='$LETSENCRYPT_EMAIL' bash -s" \
             < deploy/scripts/bootstrap.sh
 
       - name: Upload artifacts and config

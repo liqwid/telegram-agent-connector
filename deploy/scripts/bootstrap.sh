@@ -15,14 +15,21 @@
 #   - Node.js 22 (NodeSource), nginx, ufw, rsync/curl, pm2 (global npm)
 #   - the pm2 systemd boot unit for the `tac` user; nginx enabled
 #
-# TLS terminates at Cloudflare; the Cloudflare-to-origin certificate at
-# /etc/tac/tls is provisioned by hand once (see deploy/README.md) — this
-# script never touches it.
+# TLS: when TLS_DOMAIN and CLOUDFLARE_API_TOKEN are exported by the caller,
+# a Let's Encrypt certificate is issued via certbot's Cloudflare DNS-01
+# challenge (inbound ports stay Cloudflare-only — no HTTP-01 possible) and
+# symlinked to /etc/tac/tls/{origin.pem,origin.key}, where the nginx vhost
+# expects it. A cron entry renews it automatically (certbot renews when <30
+# days to expiry). Without those variables the TLS step is skipped and
+# /etc/tac/tls can be provisioned by hand (see deploy/README.md).
 set -euo pipefail
 
 readonly SERVICE_USER="tac"
 readonly DEPLOY_DIR="/opt/tac"
 readonly ENV_DIR="/etc/tac"
+readonly TLS_DIR="${ENV_DIR}/tls"
+readonly CERTBOT_CREDENTIALS="${ENV_DIR}/certbot-cloudflare.ini"
+readonly RENEW_CRON="/etc/cron.d/tac-certbot-renew"
 readonly PM2_BOOT_UNIT="/etc/systemd/system/pm2-${SERVICE_USER}.service"
 
 require_root() {
@@ -110,6 +117,72 @@ ensure_pm2() {
   pm2 startup systemd -u "${SERVICE_USER}" --hp "/home/${SERVICE_USER}"
 }
 
+# --- TLS via Let's Encrypt (Cloudflare DNS-01) ------------------------------
+
+write_certbot_credentials() {
+  # Rewritten every run so a rotated Cloudflare token reaches certbot; content
+  # is identical otherwise. Mode 600 before the secret is written.
+  install -m 600 -o root -g root /dev/null "${CERTBOT_CREDENTIALS}"
+  printf 'dns_cloudflare_api_token = %s\n' "${CLOUDFLARE_API_TOKEN}" \
+    > "${CERTBOT_CREDENTIALS}"
+}
+
+issue_certificate_if_missing() {
+  if [[ -f "/etc/letsencrypt/live/${TLS_DOMAIN}/fullchain.pem" ]]; then
+    echo "bootstrap: certificate for ${TLS_DOMAIN} already issued"
+    return
+  fi
+  # DNS-01: certbot plants a TXT record through the Cloudflare API — no
+  # inbound port needed, so the Cloudflare-only firewall stays intact.
+  local email_args=(--register-unsafely-without-email)
+  if [[ -n "${LETSENCRYPT_EMAIL:-}" ]]; then
+    email_args=(-m "${LETSENCRYPT_EMAIL}")
+  fi
+  echo "bootstrap: issuing Let's Encrypt certificate for ${TLS_DOMAIN}"
+  certbot certonly \
+    --dns-cloudflare \
+    --dns-cloudflare-credentials "${CERTBOT_CREDENTIALS}" \
+    -d "${TLS_DOMAIN}" \
+    --non-interactive --agree-tos "${email_args[@]}"
+}
+
+link_certificate_into_tls_dir() {
+  # The nginx vhost reads /etc/tac/tls/{origin.pem,origin.key}; symlinks keep
+  # it agnostic of how the certificate is managed. certbot's live/ paths are
+  # stable across renewals, so the links never need updating.
+  install -d -o root -g root -m 755 "${TLS_DIR}"
+  ln -sf "/etc/letsencrypt/live/${TLS_DOMAIN}/fullchain.pem" "${TLS_DIR}/origin.pem"
+  ln -sf "/etc/letsencrypt/live/${TLS_DOMAIN}/privkey.pem" "${TLS_DIR}/origin.key"
+  echo "bootstrap: ${TLS_DIR} linked to the ${TLS_DOMAIN} certificate"
+}
+
+ensure_renewal_cron() {
+  # `certbot renew` checks expiry on every run and only acts when a
+  # certificate has <30 days left; nginx is reloaded only when a renewal
+  # actually happened (deploy-hook). Twice daily at odd minutes, per
+  # certbot's own recommendation.
+  cat > "${RENEW_CRON}" <<'EOF'
+# Managed by telegram-agent-connector deploy/scripts/bootstrap.sh — do not edit.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+17 3,15 * * * root certbot renew --quiet --deploy-hook "systemctl reload nginx"
+EOF
+  chmod 644 "${RENEW_CRON}"
+  echo "bootstrap: renewal cron installed at ${RENEW_CRON}"
+}
+
+ensure_tls_certificate() {
+  if [[ -z "${TLS_DOMAIN:-}" || -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+    echo "bootstrap: TLS_DOMAIN/CLOUDFLARE_API_TOKEN not set — skipping certbot; provision ${TLS_DIR} manually (see deploy/README.md)"
+    return
+  fi
+  apt_install_if_missing certbot python3-certbot-dns-cloudflare
+  write_certbot_credentials
+  issue_certificate_if_missing
+  link_certificate_into_tls_dir
+  ensure_renewal_cron
+}
+
 main() {
   require_root
   apt_install_if_missing curl ca-certificates gnupg rsync
@@ -118,6 +191,7 @@ main() {
   ensure_node
   ensure_nginx_and_ufw
   ensure_pm2
+  ensure_tls_certificate
   echo "bootstrap: done (idempotent — safe to run on every deploy)"
 }
 

@@ -28,10 +28,17 @@ ecosystem, scripts) redeploy automatically: the workflow rsyncs the whole
   interrupts the service; an in-flight QR login restarts, a _stored_ session is
   unaffected (it lives encrypted in Postgres).
 - **TLS terminates at Cloudflare**; the Cloudflare-to-origin hop is encrypted
-  with a **Cloudflare Origin CA certificate** at `/etc/tac/tls/{origin.pem,origin.key}`
-  (SSL mode **Full (strict)**). Provision it once by hand: Cloudflare dashboard
-  → SSL/TLS → Origin Server → Create Certificate, then install both files mode
-  600 root-owned.
+  with a **Let's Encrypt certificate** that bootstrap issues automatically via
+  certbot's **Cloudflare DNS-01 challenge** (set `TLS_DOMAIN` +
+  `CLOUDFLARE_API_TOKEN` in `tac-deploy/prd`). DNS-01 needs no inbound port,
+  so the Cloudflare-only firewall stays intact; the cert is publicly trusted,
+  satisfying SSL mode **Full (strict)**. certbot's live paths are symlinked to
+  `/etc/tac/tls/{origin.pem,origin.key}` (what the vhost reads), and a cron
+  entry (`/etc/cron.d/tac-certbot-renew`, twice daily) runs `certbot renew`,
+  which checks expiry and renews below 30 days remaining, reloading nginx only
+  when a renewal happened. Leaving the two variables unset skips all of this —
+  you can instead provision `/etc/tac/tls` by hand (e.g. a Cloudflare Origin
+  CA certificate).
 - **ufw only admits Cloudflare** — `deploy/scripts/configure-firewall.sh` runs
   on every deploy: default deny incoming, rate-limited SSH, ports 80/443 open
   only to Cloudflare's published IP ranges (fetched live, cached in
@@ -56,8 +63,14 @@ Two projects, two service tokens; GitHub Actions holds only the tokens
 
 | Doppler project   | Consumed by            | Secrets                                                                                                                                                                            |
 | ----------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tac-deploy/prd`  | workflow only          | `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `SSH_PORT` (opt)                                                                                                                        |
+| `tac-deploy/prd`  | workflow only          | `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `SSH_PORT` (opt), `TLS_DOMAIN` (opt¹), `CLOUDFLARE_API_TOKEN` (opt¹), `LETSENCRYPT_EMAIL` (opt)                                         |
 | `tac-backend/prd` | service (+ migrations) | `DATABASE_URL`, `ENCRYPTION_SECRET`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `PUBLIC_BASE_URL`, `PORT=8300`, `NODE_ENV=production`, `CORS_ORIGIN` (opt), `LOGIN_TTL_SECONDS` (opt) |
+
+¹ `TLS_DOMAIN` (e.g. `tg.example.com`) and `CLOUDFLARE_API_TOKEN` together
+enable automatic Let's Encrypt provisioning in bootstrap. The token needs
+**Zone → DNS → Edit** permission on the domain's zone (create it at Cloudflare
+dashboard → My Profile → API Tokens). `LETSENCRYPT_EMAIL` is used for expiry
+notices; without it registration proceeds email-less.
 
 The entire `tac-backend/prd` config is exported verbatim to
 `/etc/tac/backend.env` on each deploy — adding a variable in Doppler and
@@ -69,20 +82,22 @@ is parsed literally after `=`).
 Provisioning is part of the pipeline: the workflow pipes
 `deploy/scripts/bootstrap.sh` over SSH and runs it as root on **every deploy**.
 The script is idempotent — it checks each prerequisite (the `tac` service user,
-`/opt/tac` + `/etc/tac`, Node 22, nginx, ufw, pm2 + boot unit) and creates it
-only when missing, so on an already-provisioned server it's a fast no-op. A
-fresh Debian/Ubuntu box needs no manual preparation beyond SSH access; you can
-also run it by hand: `sudo bash deploy/scripts/bootstrap.sh`.
+`/opt/tac` + `/etc/tac`, Node 22, nginx, ufw, pm2 + boot unit, the TLS
+certificate and its renewal cron) and creates it only when missing, so on an
+already-provisioned server it's a fast no-op. A fresh Debian/Ubuntu box needs
+no manual preparation beyond SSH access; you can also run it by hand:
+`sudo TLS_DOMAIN=… CLOUDFLARE_API_TOKEN=… bash deploy/scripts/bootstrap.sh`.
 
 What remains manual (one-time):
 
 1. An SSH user for CI: either `root`, or a user with passwordless sudo
    (`echo 'deploy ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/deploy`, or scoped
    to the commands used in the scripts).
-2. Provision the Cloudflare Origin CA certificate at `/etc/tac/tls/`.
-3. Point a **proxied** Cloudflare DNS record at the server; set that URL as
-   `PUBLIC_BASE_URL` in `tac-backend/prd`.
-4. Create the two Doppler service tokens and add them as GitHub repo secrets.
+2. Point a **proxied** Cloudflare DNS record at the server; set that URL as
+   `PUBLIC_BASE_URL` in `tac-backend/prd` and the bare hostname as
+   `TLS_DOMAIN` in `tac-deploy/prd`, plus a `CLOUDFLARE_API_TOKEN` with DNS
+   edit rights on the zone.
+3. Create the two Doppler service tokens and add them as GitHub repo secrets.
 
 Then every push to `main` touching `backend/`, `common/` or `deploy/` deploys —
 or run the workflow manually via **workflow_dispatch**.

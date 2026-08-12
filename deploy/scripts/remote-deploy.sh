@@ -48,14 +48,16 @@ reload_pm2_service() {
   pm2_as_service_user save
 }
 
-# The vhost terminates TLS with the Cloudflare Origin CA certificate, which is
-# provisioned once by hand (see deploy/README.md) — nginx refuses to start
-# without it, so fail here with a message that names the missing file instead.
+# The vhost terminates TLS with the certificate at /etc/tac/tls — normally
+# Let's Encrypt symlinks installed by bootstrap.sh (TLS_DOMAIN +
+# CLOUDFLARE_API_TOKEN in the deploy Doppler config), or a manually
+# provisioned pair. nginx refuses to start without it, so fail here with a
+# message that names the missing file instead.
 assert_origin_certificate() {
   local path
   for path in "${TLS_CERT}" "${TLS_KEY}"; do
     if ! sudo test -f "${path}"; then
-      echo "remote-deploy: missing ${path} — provision the Cloudflare Origin CA certificate (see deploy/README.md)" >&2
+      echo "remote-deploy: missing ${path} — set TLS_DOMAIN/CLOUDFLARE_API_TOKEN in the deploy Doppler config (certbot bootstrap) or provision the certificate manually (see deploy/README.md)" >&2
       return 1
     fi
   done

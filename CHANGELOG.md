@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Automated origin TLS.** Bootstrap now issues a Let's Encrypt certificate
+  via certbot's Cloudflare DNS-01 challenge when `TLS_DOMAIN` +
+  `CLOUDFLARE_API_TOKEN` (new `tac-deploy/prd` secrets, `LETSENCRYPT_EMAIL`
+  optional) are set: no inbound port needed, so the Cloudflare-only firewall
+  stays intact, and the publicly-trusted cert satisfies SSL mode Full
+  (strict). certbot's live paths are symlinked to `/etc/tac/tls/` (the vhost
+  is unchanged) and `/etc/cron.d/tac-certbot-renew` checks expiry twice daily,
+  renewing below 30 days and reloading nginx only on actual renewal. Manual
+  Cloudflare Origin CA provisioning remains as the fallback when the secrets
+  are unset.
+
 - **Bootstrap folded into the pipeline.** `deploy/scripts/bootstrap.sh` is now
   fully idempotent (guards on the `tac` user, directories, Node 22, apt
   packages, pm2 boot unit; `apt-get update` only when something actually needs
