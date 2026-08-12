@@ -1,0 +1,13 @@
+{
+  "name": "telegram-agent-connector",
+  "owner": {
+    "name": "Tony Popov"
+  },
+  "plugins": [
+    {
+      "name": "telegram-connector",
+      "source": "./",
+      "description": "Connect Claude to your Telegram account via QR login, backed by a self-hosted session backend."
+    }
+  ]
+}

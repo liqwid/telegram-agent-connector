@@ -1,0 +1,151 @@
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - common/**
+      - deploy/**
+      - .github/workflows/deploy-backend.yml
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+# Secrets live in two Doppler projects, each read with its own service token:
+#   tac-deploy/prd  (DOPPLER_DEPLOY_TOKEN)  — deploy-time values (SSH target
+#                                             and key)
+#   tac-backend/prd (DOPPLER_BACKEND_TOKEN) — the service env (DATABASE_URL,
+#                                             ENCRYPTION_SECRET,
+#                                             PUBLIC_BASE_URL, PORT …),
+#                                             exported to /etc/tac/backend.env
+#                                             on the server
+# GitHub holds only the two tokens.
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
+
+      - name: Load deploy config from Doppler
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_DEPLOY_TOKEN }}
+          DOPPLER_BACKEND_TOKEN: ${{ secrets.DOPPLER_BACKEND_TOKEN }}
+        run: |
+          if [ -z "$DOPPLER_TOKEN" ] || [ -z "$DOPPLER_BACKEND_TOKEN" ]; then
+            echo "DOPPLER_DEPLOY_TOKEN and DOPPLER_BACKEND_TOKEN secrets are both required" >&2
+            exit 1
+          fi
+          # Values needed as step inputs below (everything else reaches the
+          # service only via the env-file download). GitHub auto-masks only its
+          # own secrets, so Doppler-fetched values are masked explicitly before
+          # being exported to GITHUB_ENV.
+          get_secret() { doppler secrets get "$1" --plain 2>/dev/null || true; }
+          mask_and_export() {
+            if [ -n "$2" ]; then echo "::add-mask::$2"; fi
+            printf '%s=%s\n' "$1" "$2" >> "$GITHUB_ENV"
+          }
+          mask_and_export SSH_HOST "$(get_secret SSH_HOST)"
+          mask_and_export SSH_USER "$(get_secret SSH_USER)"
+          ssh_port="$(get_secret SSH_PORT)"
+          printf 'SSH_PORT=%s\n' "${ssh_port:-22}" >> "$GITHUB_ENV"
+          # SSH_PRIVATE_KEY is only presence-checked here; the Configure SSH
+          # step fetches it straight into the key file (multi-line values
+          # don't belong in GITHUB_ENV).
+          for required in SSH_HOST SSH_USER SSH_PRIVATE_KEY; do
+            if [ -z "$(get_secret "$required")" ]; then
+              echo "Doppler config is missing required secret: $required" >&2
+              exit 1
+            fi
+          done
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build service
+        run: npm run build -w backend
+
+      - name: Stage runtime native deps
+        # The esbuild bundle is self-contained except for ws's optional native
+        # accelerators, which gramjs's websocket dependency hard-requires.
+        # Both ship prebuilt binaries for linux in the npm package, so a tiny
+        # standalone node_modules staged here is all the server needs.
+        run: |
+          # Pin to the exact versions the lockfile resolved for the build.
+          BUFFERUTIL_VERSION="$(node -p "require('bufferutil/package.json').version")"
+          UTF8_VALIDATE_VERSION="$(node -p "require('utf-8-validate/package.json').version")"
+          mkdir -p stage-runtime
+          cd stage-runtime
+          npm init -y >/dev/null
+          npm install --omit=dev \
+            "bufferutil@${BUFFERUTIL_VERSION}" \
+            "utf-8-validate@${UTF8_VALIDATE_VERSION}"
+
+      - name: Migrate database
+        # DATABASE_URL is injected from the backend Doppler config; migrations
+        # run from the CI runner against the cloud database, never on the
+        # server.
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_BACKEND_TOKEN }}
+        run: doppler run -- npm run migrate -w backend
+
+      - name: Configure SSH
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_DEPLOY_TOKEN }}
+        run: |
+          mkdir -p ~/.ssh
+          # Fetched straight into the key file — never exported or echoed.
+          doppler secrets get SSH_PRIVATE_KEY --plain > ~/.ssh/deploy_key
+          printf '\n' >> ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Upload artifacts and config
+        run: |
+          SSH_OPTS="-i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts -p $SSH_PORT"
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "sudo install -d -o $SSH_USER -m 755 /opt/tac/backend /opt/tac/deploy"
+          rsync -az --delete -e "ssh $SSH_OPTS" \
+            backend/build/ "$SSH_USER@$SSH_HOST:/opt/tac/backend/build/"
+          rsync -az --delete -e "ssh $SSH_OPTS" \
+            stage-runtime/node_modules/ "$SSH_USER@$SSH_HOST:/opt/tac/backend/node_modules/"
+          rsync -az --delete -e "ssh $SSH_OPTS" \
+            deploy/ "$SSH_USER@$SSH_HOST:/opt/tac/deploy/"
+
+      - name: Write service env file (mode 640, root:tac)
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_BACKEND_TOKEN }}
+        run: |
+          SSH_OPTS="-i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts -p $SSH_PORT"
+          # The pm2 ecosystem config parses this file as the `tac` service user,
+          # so the file must be group-readable by `tac` and the directory
+          # traversable by it — root-only (700/600) fails with EACCES on reload.
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "sudo install -d -o root -g tac -m 750 /etc/tac"
+          # Export the whole backend Doppler config as the service env file,
+          # piped over SSH stdin so secrets never appear in logs or the remote
+          # process list. env-no-quotes matches the ecosystem config's parser
+          # (values are taken literally after '='), so keep values single-line.
+          doppler secrets download --no-file --format env-no-quotes \
+            | ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+              "sudo tee /etc/tac/backend.env >/dev/null \
+                && sudo chown root:tac /etc/tac/backend.env \
+                && sudo chmod 640 /etc/tac/backend.env"
+
+      - name: Run remote deploy
+        run: |
+          SSH_OPTS="-i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts -p $SSH_PORT"
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "SSH_PORT='$SSH_PORT' bash /opt/tac/deploy/scripts/remote-deploy.sh"

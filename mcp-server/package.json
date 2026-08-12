@@ -1,0 +1,31 @@
+{
+  "name": "mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "node build/index.js",
+    "build": "node esbuild.config.js",
+    "ts": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.0.1",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-simple-import-sort": "^13.0.0",
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "globals": "^17.7.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.0"
+  }
+}

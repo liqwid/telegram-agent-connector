@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "telegram-connector": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp-server/build/index.js"],
+      "env": {
+        "TELEGRAM_CONNECTOR_URL": "${TELEGRAM_CONNECTOR_URL:-http://localhost:8300}"
+      }
+    }
+  }
+}

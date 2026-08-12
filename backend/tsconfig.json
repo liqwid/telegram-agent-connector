@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2024"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+
+    "preserveConstEnums": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "esbuild.config.js",
+    "vitest.config.ts",
+    "kysely.config.ts"
+  ],
+  "exclude": ["node_modules", "build"]
+}

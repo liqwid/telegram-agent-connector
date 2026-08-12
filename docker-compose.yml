@@ -1,0 +1,39 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8300:8300"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:postgres@db:5432/telegram_connector
+      # The deployment's Telegram application (https://my.telegram.org/apps):
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:?set TELEGRAM_API_ID in .env}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:?set TELEGRAM_API_HASH in .env}
+      # Public URL your users/plugins will reach this backend at:
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8300}
+      # Encrypts api_hash values and Telegram sessions at rest — set a strong
+      # value in .env and back it up; losing it invalidates stored sessions.
+      ENCRYPTION_SECRET: ${ENCRYPTION_SECRET:?set ENCRYPTION_SECRET in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: telegram_connector
+    volumes:
+      - tac-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  tac-pgdata:

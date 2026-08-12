@@ -1,0 +1,11 @@
+{
+  "name": "telegram-connector",
+  "version": "0.1.0",
+  "description": "Connect Claude to your Telegram account via QR login, backed by a self-hosted session backend.",
+  "author": {
+    "name": "Tony Popov"
+  },
+  "homepage": "https://github.com/tonypopov/telegram-agent-connector",
+  "license": "MIT",
+  "keywords": ["telegram", "mcp", "qr-login", "telethon"]
+}

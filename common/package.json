@@ -1,0 +1,35 @@
+{
+  "name": "common",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./http": "./src/http/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "ts": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.0.1",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-simple-import-sort": "^13.0.0",
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "globals": "^17.7.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.0",
+    "vitest": "^4.1.9"
+  }
+}
