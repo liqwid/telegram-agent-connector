@@ -17,7 +17,9 @@ import {
   logoHandler,
   openApiHandler,
 } from "@/controllers/discovery";
+import { homePageHandler } from "@/controllers/home";
 import { env } from "@/env";
+import { mcpMethodNotAllowedHandler, mcpPostHandler } from "@/mcp/routes";
 import {
   httpErrorHandler,
   loggingMiddleware,
@@ -43,6 +45,14 @@ export function createApp(): express.Express {
 
   // Hosted QR page (ChatGPT fallback / no-inline-image clients)
   app.get("/connect/:accountId", connectPageHandler);
+
+  // Hosted MCP connector (Claude): personal URL, stateless Streamable HTTP
+  app.post("/mcp/:accountToken", mcpPostHandler);
+  app.get("/mcp/:accountToken", mcpMethodNotAllowedHandler);
+  app.delete("/mcp/:accountToken", mcpMethodNotAllowedHandler);
+
+  // Onboarding landing page — creates a connector URL in one click
+  app.get("/", homePageHandler);
 
   // Discovery
   app.get("/.well-known/ai-plugin.json", aiPluginHandler);

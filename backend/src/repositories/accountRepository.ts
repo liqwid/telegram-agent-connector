@@ -37,6 +37,22 @@ export async function findAccountWithTokenHashById(
   return parseItem(accountWithTokenHashSchema, row);
 }
 
+/**
+ * Authentication lookup for the hosted MCP endpoint, where the URL carries
+ * only the bearer token: the caller hashes the presented token and the match
+ * happens on the indexed hash — the raw token is never stored or compared.
+ */
+export async function findAccountByTokenHash(
+  tokenHash: string,
+): Promise<AccountWithTokenHash | null> {
+  const row = await getDb()
+    .selectFrom("accounts")
+    .selectAll()
+    .where("token_hash", "=", tokenHash)
+    .executeTakeFirst();
+  return parseItem(accountWithTokenHashSchema, row);
+}
+
 export async function saveAccountSession(
   accountId: string,
   session: AuthorizedSession,

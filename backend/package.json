@@ -18,6 +18,7 @@
     "migrate:make": "kysely migrate:make"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "common": "*",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Hosted MCP connector — zero-install Claude setup.** The backend now serves
+  a stateless Streamable-HTTP MCP endpoint at `POST /mcp/:accountToken` with
+  the same five tools as the local bridge (QR returned as inline image), each
+  request bound to the account resolved from the URL's bearer token (indexed
+  lookup by token hash, migration `0003_token_hash_unique`). A new onboarding
+  landing page at `/` creates an account in one click and hands out the
+  personal connector URL for claude.ai / Claude Desktop / Claude Code
+  (`claude mcp add --transport http …`). Request logging now redacts token
+  segments (`/mcp/<token>`, `?token=`) from URLs. The local stdio bridge
+  remains as an alternative.
+
 - **Automated origin TLS.** Bootstrap now issues a Let's Encrypt certificate
   via certbot's Cloudflare DNS-01 challenge when `TLS_DOMAIN` +
   `CLOUDFLARE_API_TOKEN` (new `tac-deploy/prd` secrets, `LETSENCRYPT_EMAIL`

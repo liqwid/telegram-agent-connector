@@ -54,17 +54,30 @@ The backend must run as a **single process** — in-flight QR logins live in mem
 
 ### 2. Connect Claude
 
+**Easiest — hosted connector (no local software).** Open the backend's landing
+page (`https://<your-backend>/`), click **Create my connector**, and paste the
+personal URL it gives you into Claude:
+
+- **claude.ai / Claude Desktop**: Settings → Connectors → Add custom connector
+- **Claude Code**: `claude mcp add --transport http telegram https://<your-backend>/mcp/<token>`
+
+The URL embeds your bearer token — treat it like a password.
+
+**Alternative — local stdio bridge** (works fully offline against a local
+backend, or if you prefer not to expose the MCP endpoint):
+
 ```bash
 npm install && npm run build          # bundles mcp-server/build/index.js
-claude mcp add telegram-connector -- node "$(pwd)/mcp-server/build/index.js"
+claude mcp add telegram-connector \
+  --env TELEGRAM_CONNECTOR_URL=https://<your-backend> \
+  -- node "$(pwd)/mcp-server/build/index.js"
 ```
 
 Or install the repo as a Claude Code plugin (it ships `.claude-plugin/`,
 `.mcp.json` and a skill): `/plugin marketplace add <owner>/telegram-agent-connector`.
-If your backend is not on localhost, set `TELEGRAM_CONNECTOR_URL`.
 
-Then just ask Claude to _"connect my Telegram account"_ — it renders the QR in
-chat and polls until you've scanned it.
+Either way, then just ask Claude to _"connect my Telegram account"_ — it
+renders the QR in chat and polls until you've scanned it.
 
 ### 3. Connect ChatGPT
 
@@ -82,6 +95,8 @@ Deploy the backend behind HTTPS, then create a Custom GPT whose Action imports
 | `POST /v1/accounts/:id/password` | Complete a 2FA login                                          |
 | `DELETE /v1/accounts/:id`        | Log out remotely + delete the account                         |
 | `GET /connect/:id?token=…`       | Hosted auto-refreshing QR page                                |
+| `POST /mcp/:token`               | Hosted MCP connector for Claude (Streamable HTTP)             |
+| `GET /`                          | Onboarding page — creates a personal connector URL            |
 | `GET /openapi.json`              | OpenAPI 3.1 (GPT Actions import)                              |
 
 ## Security model

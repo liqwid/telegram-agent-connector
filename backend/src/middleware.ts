@@ -23,8 +23,17 @@ const errorStatusMap: Record<string, HTTPStatus> = {
   [TelegramLoginError.name]: HTTPStatus.BAD_GATEWAY,
 };
 
+/**
+ * Bearer tokens travel in URLs here by design (MCP connector path segment,
+ * `?token=` on image/page links) — scrub them before the URL hits the logs.
+ */
+const redactUrlSecrets = (url: string): string =>
+  url
+    .replace(/\/mcp\/[^/?#]+/, "/mcp/[redacted]")
+    .replace(/([?&]token=)[^&#]*/g, "$1[redacted]");
+
 export const loggingMiddleware: RequestHandler = (req, _res, next) => {
-  logger.info(`${req.method} ${req.originalUrl}`);
+  logger.info(`${req.method} ${redactUrlSecrets(req.originalUrl)}`);
   next();
 };
 
