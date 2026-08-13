@@ -28,28 +28,26 @@ your own infrastructure, see [Option B](#option-b--self-host).
 
 ### Claude
 
-1. Open <https://tgagent.grownow.tech> and click **Create my connector** — you get a
-   personal connector URL. It embeds your bearer token: **treat it like a password**,
-   it's shown only once.
-2. Add it to Claude:
-   - **claude.ai / Claude Desktop**: Settings → Connectors → Add custom connector →
-     paste the URL.
-   - **Claude Code**:
-     ```bash
-     claude mcp add --transport http telegram https://tgagent.grownow.tech/mcp/<token>
-     ```
-     (Terminal-only alternative, no browser needed:
-     `TOKEN=$(curl -s -X POST https://tgagent.grownow.tech/v1/accounts | jq -r .accountToken)`
-     then use it in the command above.)
-3. Ask Claude to _“connect my Telegram account”_ — it shows the QR; scan it from the
-   Telegram app (**Settings → Devices → Link Desktop Device**).
+One URL, OAuth handles the rest:
+
+- **claude.ai / Claude Desktop**: Settings → Connectors → Add custom connector →
+  paste `https://tgagent.grownow.tech/mcp` → approve on the consent page.
+- **Claude Code**:
+  ```bash
+  claude mcp add --transport http telegram https://tgagent.grownow.tech/mcp
+  ```
+
+Then ask Claude to _“connect my Telegram account”_ — it sends the QR page link
+(and shows the QR inline where supported); scan from the Telegram app
+(**Settings → Devices → Link Desktop Device**).
 
 ### ChatGPT
 
-Create a Custom GPT (**Explore GPTs → Create → Configure → Create new action**) whose
-Action imports `https://tgagent.grownow.tech/openapi.json` (Authentication: None), and
-paste [`chatgpt/gpt-instructions.md`](chatgpt/gpt-instructions.md) into its
-Instructions. Full walkthrough: [`chatgpt/README.md`](chatgpt/README.md).
+- **Connector (developer mode)**: Settings → Apps & Connectors → enable Developer
+  mode → add custom connector with the same `https://tgagent.grownow.tech/mcp` URL.
+- **Custom GPT (Actions)**: import `https://tgagent.grownow.tech/openapi.json` — quick
+  personal setup with Authentication: None, or publish one shared GPT with OAuth so
+  users authenticate once. Full walkthrough: [`chatgpt/README.md`](chatgpt/README.md).
 
 ## Option B — self-host
 
@@ -111,10 +109,14 @@ Or install the repo as a Claude Code plugin (it ships `.claude-plugin/`,
 | `GET /v1/accounts/:id`           | Status: `waiting_scan` / `password_needed` / `authorized` / … |
 | `POST /v1/accounts/:id/password` | Complete a 2FA login                                          |
 | `DELETE /v1/accounts/:id`        | Log out remotely + delete the account                         |
-| `GET /connect/:id?token=…`       | Hosted auto-refreshing QR page                                |
-| `POST /mcp/:token`               | Hosted MCP connector for Claude (Streamable HTTP)             |
-| `GET /`                          | Onboarding page — creates a personal connector URL            |
-| `GET /openapi.json`              | OpenAPI 3.1 (GPT Actions import)                              |
+| `GET /connect/:id?token=…`       | Hosted auto-refreshing QR page (signed page tokens)           |
+| `POST /mcp`                      | Hosted MCP connector, OAuth bearer (Streamable HTTP)          |
+| `POST /mcp/:token`               | Legacy personal-URL MCP connector                             |
+| `GET/POST /oauth/*`              | OAuth 2.1: register (DCR), authorize (consent), token         |
+| `GET /.well-known/oauth-*`       | OAuth discovery (RFC 8414 + 9728)                             |
+| `GET/POST/DELETE /v1/me…`        | OAuth-scoped status / QR / password / disconnect              |
+| `GET /`                          | Onboarding page with setup instructions                       |
+| `GET /openapi.json`              | OpenAPI 3.1 (GPT Actions import, OAuth security scheme)       |
 
 ## Security model
 

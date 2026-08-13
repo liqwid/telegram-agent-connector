@@ -8,6 +8,7 @@ import {
 } from "@/models/error";
 import { saveAccountSession } from "@/repositories/accountRepository";
 import { encryptSecret } from "@/services/encryption";
+import { createPageToken } from "@/services/pageTokens";
 import {
   type QrLoginView,
   startQrLogin as startTelegramQrLogin,
@@ -26,11 +27,11 @@ const CREDENTIAL_ERROR_CODES = ["API_ID_INVALID", "API_ID_PUBLISHED_FLOOD"];
  * Kick off a QR login for the account using the deployment's Telegram
  * application credentials, and hand back everything a plugin needs to show
  * the QR — the raw `tg://login` URL, a PNG endpoint, and a hosted fallback
- * page.
+ * page. Links are authenticated with a short-lived signed page token, so
+ * they work for OAuth callers who never hold a raw account token.
  */
 export async function startQrLogin(
   account: AccountWithTokenHash,
-  accountToken: string,
 ): Promise<StartedQrLogin> {
   if (account.sessionEnc) {
     throw new AlreadyAuthorizedError(
@@ -64,7 +65,9 @@ export async function startQrLogin(
 
   logger.info("startQrLogin: QR issued", { accountId: account.id });
   const base = env.PUBLIC_BASE_URL;
-  const token = encodeURIComponent(accountToken);
+  const token = encodeURIComponent(
+    createPageToken(account.id, env.LOGIN_TTL_SECONDS + 300),
+  );
   return {
     ...view,
     accountId: account.id,

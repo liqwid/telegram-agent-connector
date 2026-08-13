@@ -25,10 +25,15 @@ const tokenQueryParameter = {
   schema: { type: "string" },
 };
 
-const jsonBody = (schema: z.ZodType) => ({
-  required: true,
-  content: { "application/json": { schema: z.toJSONSchema(schema) } },
-});
+const jsonBody = (schema: z.ZodType) => {
+  // Zod stamps "$schema" into its output; OpenAPI validators (ChatGPT's
+  // Actions importer among them) reject it inside a document — strip it.
+  const { $schema: _ignored, ...jsonSchema } = z.toJSONSchema(schema);
+  return {
+    required: true,
+    content: { "application/json": { schema: jsonSchema } },
+  };
+};
 
 const jsonResponse = (description: string) => ({
   description,
@@ -42,7 +47,7 @@ export function buildOpenApiSpec() {
       title: "Telegram Agent Connector",
       version: "0.1.0",
       description:
-        "Connects AI assistants to a user's Telegram account. Flow: create an account (no input needed), start a QR login, show the user the QR (connectPage link), poll status until 'authorized' — submitting the 2FA password if status becomes 'password_needed'. Authenticate account-scoped calls with 'Authorization: Bearer <accountToken>'.",
+        "Connects AI assistants to a user's Telegram account. OAuth callers use the /v1/me endpoints (the token implies the account): start a QR login, show the user the connectPage link, poll status until 'authorized' — submitting the 2FA password if status becomes 'password_needed'. The /v1/accounts endpoints are the tokenless variant: create an account first, then authenticate with 'Authorization: Bearer <accountToken>'.",
     },
     servers: [{ url: env.PUBLIC_BASE_URL }],
     paths: {
@@ -71,7 +76,9 @@ export function buildOpenApiSpec() {
           responses: {
             "200": {
               description: "PNG image",
-              content: { "image/png": {} },
+              content: {
+                "image/png": { schema: { type: "string", format: "binary" } },
+              },
             },
           },
         },
@@ -92,6 +99,41 @@ export function buildOpenApiSpec() {
           responses: { "200": jsonResponse("Account deleted") },
         },
       },
+      "/v1/me": {
+        get: {
+          operationId: "getMyStatus",
+          summary:
+            "OAuth: login/session status for the authenticated user: not_started, waiting_scan, password_needed, authorized, expired, or error. Poll this while the user scans.",
+          security: [{ oauth: ["telegram"] }],
+          responses: { "200": jsonResponse("Current status") },
+        },
+        delete: {
+          operationId: "disconnectMe",
+          summary:
+            "OAuth: log out of Telegram and delete the authenticated user's account. Destructive — confirm with the user first.",
+          security: [{ oauth: ["telegram"] }],
+          responses: { "200": jsonResponse("Account deleted") },
+        },
+      },
+      "/v1/me/qr": {
+        post: {
+          operationId: "startMyQrLogin",
+          summary:
+            "OAuth: start (or restart) a QR login for the authenticated user. Send the user the connectPage URL from the response — the page shows the QR and auto-refreshes it.",
+          security: [{ oauth: ["telegram"] }],
+          responses: { "200": jsonResponse("QR login started") },
+        },
+      },
+      "/v1/me/password": {
+        post: {
+          operationId: "submitMyPassword",
+          summary:
+            "OAuth: complete a 2FA-protected login with the user's Telegram cloud password (when status is password_needed).",
+          security: [{ oauth: ["telegram"] }],
+          requestBody: jsonBody(submitPasswordBodySchema),
+          responses: { "200": jsonResponse("Password accepted") },
+        },
+      },
       "/v1/accounts/{accountId}/password": {
         post: {
           operationId: "submitPassword",
@@ -106,6 +148,17 @@ export function buildOpenApiSpec() {
     components: {
       securitySchemes: {
         accountToken: { type: "http", scheme: "bearer" },
+        oauth: {
+          type: "oauth2",
+          flows: {
+            authorizationCode: {
+              authorizationUrl: `${env.PUBLIC_BASE_URL}/oauth/authorize`,
+              tokenUrl: `${env.PUBLIC_BASE_URL}/oauth/token`,
+              refreshUrl: `${env.PUBLIC_BASE_URL}/oauth/token`,
+              scopes: { telegram: "Connect and use your Telegram account" },
+            },
+          },
+        },
       },
     },
   };

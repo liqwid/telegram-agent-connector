@@ -17,6 +17,41 @@ export interface AccountsTable {
   authorized_at: Timestamp | null;
 }
 
+export interface OauthClientsTable {
+  id: string;
+  secret_hash: string | null;
+  name: string;
+  // JSON-encoded string[] of exact redirect URIs.
+  redirect_uris: string;
+  auth_method: string;
+  created_at: ColumnType<Date, Date | string | undefined, never>;
+}
+
+export interface OauthCodesTable {
+  code_hash: string;
+  client_id: string;
+  account_id: string;
+  redirect_uri: string;
+  code_challenge: string | null;
+  expires_at: Timestamp;
+  created_at: ColumnType<Date, Date | string | undefined, never>;
+}
+
+export interface OauthTokensTable {
+  id: string;
+  client_id: string;
+  account_id: string;
+  access_hash: string;
+  refresh_hash: string;
+  access_expires_at: Timestamp;
+  refresh_expires_at: Timestamp;
+  created_at: ColumnType<Date, Date | string | undefined, never>;
+  updated_at: Timestamp;
+}
+
 export interface DB {
   accounts: AccountsTable;
+  oauth_clients: OauthClientsTable;
+  oauth_codes: OauthCodesTable;
+  oauth_tokens: OauthTokensTable;
 }

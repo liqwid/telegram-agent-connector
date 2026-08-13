@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **OAuth 2.1 authorization server** — the unlock for real-user distribution
+  (Anthropic connector directory, published GPTs, ChatGPT Apps). Discovery
+  metadata (RFC 8414 + RFC 9728), open dynamic client registration (RFC 7591,
+  public PKCE-S256 clients and confidential secret clients), consent page,
+  authorization-code + refresh-token grants with rotation; codes/tokens/secrets
+  stored hashed (migration `0004_oauth`). The bare `POST /mcp` endpoint now
+  does bearer auth and advertises the auth server via `WWW-Authenticate`, so
+  pasting `https://…/mcp` into Claude or ChatGPT triggers the OAuth flow
+  automatically; the personal token URLs remain as a legacy fallback. New
+  OAuth-scoped `/v1/me` endpoints (status/qr/password/disconnect) added to the
+  OpenAPI spec with an oauth2 security scheme for published GPTs. QR page/image
+  links now carry short-lived HMAC page tokens instead of raw account tokens.
+  Landing page rewritten around the single `/mcp` URL; ChatGPT guide gained a
+  "publish one GPT for everyone" OAuth walkthrough.
+
+- **OpenAPI import fixes for ChatGPT Actions.** Zod's `"$schema"` stamp is now
+  stripped from request-body schemas and the `qr.png` response declares a
+  proper binary schema — both tripped ChatGPT's Actions schema validator on
+  import.
+
 - **QR page link in every MCP response.** claude.ai does not render image tool
   content, so the inline QR was invisible there. All scan-related tool
   responses (`telegram_connect`, `telegram_qr`, and `telegram_status` while

@@ -10,6 +10,7 @@ import {
   TelegramCredentialsError,
   TelegramLoginError,
 } from "@/models/error";
+import { OauthError } from "@/models/oauth";
 
 /** Maps a domain error's `name` to the HTTP status it should produce. */
 const errorStatusMap: Record<string, HTTPStatus> = {
@@ -53,6 +54,18 @@ export const httpErrorHandler: ErrorRequestHandler = (
       message: "Validation failed",
       issues: err.issues,
     });
+    return;
+  }
+
+  // RFC 6749 error shape — OAuth clients parse `error`, not `message`.
+  if (err instanceof OauthError) {
+    const status =
+      err.code === "invalid_client"
+        ? HTTPStatus.UNAUTHORIZED
+        : HTTPStatus.BAD_REQUEST;
+    res
+      .status(status)
+      .json({ error: err.code, error_description: err.message });
     return;
   }
 

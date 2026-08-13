@@ -6,6 +6,7 @@ import { z } from "zod";
 import { env } from "@/env";
 import type { AccountWithTokenHash } from "@/models/account";
 import { findAccountWithTokenHashById } from "@/repositories/accountRepository";
+import { createPageToken } from "@/services/pageTokens";
 import { renderQrPng } from "@/services/qrImage";
 import { getActiveQrUrl } from "@/services/telegramLogin";
 import { disconnectAccount } from "@/useCases/disconnectAccount";
@@ -70,43 +71,36 @@ const freshAccount = async (
  * The hosted QR page — the one path that works in every client. Many MCP
  * clients (claude.ai among them) do not render image tool content, so every
  * tool response that expects a scan leads with this link; the inline PNG is
- * a bonus for clients that do display it.
+ * a bonus for clients that do display it. Links carry short-lived signed
+ * page tokens, so they work for OAuth sessions too.
  */
-const connectPageUrl = (accountId: string, accountToken: string): string =>
-  `${env.PUBLIC_BASE_URL}/connect/${accountId}?token=${encodeURIComponent(accountToken)}`;
+const connectPageUrl = (accountId: string): string =>
+  `${env.PUBLIC_BASE_URL}/connect/${accountId}` +
+  `?token=${encodeURIComponent(createPageToken(accountId, env.LOGIN_TTL_SECONDS + 300))}`;
 
-const scanText = (
-  accountId: string,
-  accountToken: string,
-  lead: string,
-): string =>
+const scanText = (accountId: string, lead: string): string =>
   `${lead} Send the user this link — it shows the QR code and refreshes it automatically: ` +
-  `${connectPageUrl(accountId, accountToken)} — they should open it and scan with the Telegram app ` +
+  `${connectPageUrl(accountId)} — they should open it and scan with the Telegram app ` +
   "(Settings → Devices → Link Desktop Device). A QR image is also attached in case this client displays " +
   "images. Then call telegram_status() to check progress.";
 
 const qrWithInstructions = async (
   account: AccountWithTokenHash,
-  accountToken: string,
 ): Promise<ToolResult> => {
-  const started = await startQrLogin(account, accountToken);
+  const started = await startQrLogin(account);
   const png = await renderQrPng(getActiveQrUrl(account.id));
   return toolResult(
     imageContent(png),
     textContent(
       scanText(
         account.id,
-        accountToken,
         `QR login started (window ${started.loginTtlSeconds}s, code rotates ~every 30s).`,
       ),
     ),
   );
 };
 
-export function buildMcpServer(
-  account: AccountWithTokenHash,
-  accountToken: string,
-): McpServer {
+export function buildMcpServer(account: AccountWithTokenHash): McpServer {
   const server = new McpServer(
     { name: "telegram-connector", version: "0.1.0" },
     {
@@ -138,7 +132,7 @@ export function buildMcpServer(
             ),
           );
         }
-        return qrWithInstructions(current, accountToken);
+        return qrWithInstructions(current);
       }),
   );
 
@@ -154,7 +148,7 @@ export function buildMcpServer(
       runTool(async () =>
         toolResult(
           imageContent(await renderQrPng(getActiveQrUrl(account.id))),
-          textContent(scanText(account.id, accountToken, "Fresh QR code.")),
+          textContent(scanText(account.id, "Fresh QR code.")),
         ),
       ),
   );
@@ -173,7 +167,7 @@ export function buildMcpServer(
         const status = getAccountStatus(await freshAccount(account));
         const guidance =
           status.status === "waiting_scan"
-            ? scanText(account.id, accountToken, "Still waiting for the scan.")
+            ? scanText(account.id, "Still waiting for the scan.")
             : status.status === "password_needed"
               ? "The account has 2FA — ask the user for their Telegram cloud password and call telegram_password()."
               : status.status === "authorized"

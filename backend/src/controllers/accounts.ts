@@ -35,7 +35,7 @@ export const startQrHandler = accountHandler
   .parse({ path: accountPathSchema })
   .handleAuthorized(async ({ auth }) => ({
     status: HTTPStatus.OK,
-    body: await startQrLogin(auth.account, auth.accountToken),
+    body: await startQrLogin(auth.account),
   }));
 
 /** The current QR code as a PNG image (the underlying token rotates ~30s). */

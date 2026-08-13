@@ -3,6 +3,7 @@ import { logger } from "common/logging";
 import { env } from "@/env";
 import type { AccountWithTokenHash } from "@/models/account";
 import { deleteAccount } from "@/repositories/accountRepository";
+import { deleteOauthTokensForAccount } from "@/repositories/oauthRepository";
 import { decryptSecret } from "@/services/encryption";
 import { dropQrLogin, logoutStoredSession } from "@/services/telegramLogin";
 
@@ -25,6 +26,7 @@ export async function disconnectAccount(
     );
   }
 
+  await deleteOauthTokensForAccount(account.id);
   await deleteAccount(account.id);
   logger.info("disconnectAccount: done", { accountId: account.id });
 }
