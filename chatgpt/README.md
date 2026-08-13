@@ -8,8 +8,9 @@ ChatGPT's original plugin system was retired in 2024; the supported path today i
 
 ## Set up a Custom GPT
 
-1. Deploy the backend somewhere ChatGPT can reach over **HTTPS** and set
-   `TAC_PUBLIC_BASE_URL` to that URL (Actions cannot call `localhost`).
+1. Use the hosted service (`https://tgagent.grownow.tech`) — or deploy the backend
+   somewhere ChatGPT can reach over **HTTPS** and set `PUBLIC_BASE_URL` to that URL
+   (Actions cannot call `localhost`).
 2. In ChatGPT: **Explore GPTs → Create → Configure → Create new action**, and set the
    schema import URL to `https://<your-backend>/openapi.json`. Authentication: **None**
    (per-account bearer tokens are created at runtime by the flow itself).
