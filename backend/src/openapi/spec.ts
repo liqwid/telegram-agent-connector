@@ -104,14 +104,12 @@ export function buildOpenApiSpec() {
           operationId: "getMyStatus",
           summary:
             "OAuth: login/session status for the authenticated user: not_started, waiting_scan, password_needed, authorized, expired, or error. Poll this while the user scans.",
-          security: [{ oauth: ["telegram"] }],
           responses: { "200": jsonResponse("Current status") },
         },
         delete: {
           operationId: "disconnectMe",
           summary:
             "OAuth: log out of Telegram and delete the authenticated user's account. Destructive — confirm with the user first.",
-          security: [{ oauth: ["telegram"] }],
           responses: { "200": jsonResponse("Account deleted") },
         },
       },
@@ -120,7 +118,6 @@ export function buildOpenApiSpec() {
           operationId: "startMyQrLogin",
           summary:
             "OAuth: start (or restart) a QR login for the authenticated user. Send the user the connectPage URL from the response — the page shows the QR and auto-refreshes it.",
-          security: [{ oauth: ["telegram"] }],
           responses: { "200": jsonResponse("QR login started") },
         },
       },
@@ -129,7 +126,6 @@ export function buildOpenApiSpec() {
           operationId: "submitMyPassword",
           summary:
             "OAuth: complete a 2FA-protected login with the user's Telegram cloud password (when status is password_needed).",
-          security: [{ oauth: ["telegram"] }],
           requestBody: jsonBody(submitPasswordBodySchema),
           responses: { "200": jsonResponse("Password accepted") },
         },
@@ -145,21 +141,9 @@ export function buildOpenApiSpec() {
         },
       },
     },
-    components: {
-      securitySchemes: {
-        accountToken: { type: "http", scheme: "bearer" },
-        oauth: {
-          type: "oauth2",
-          flows: {
-            authorizationCode: {
-              authorizationUrl: `${env.PUBLIC_BASE_URL}/oauth/authorize`,
-              tokenUrl: `${env.PUBLIC_BASE_URL}/oauth/token`,
-              refreshUrl: `${env.PUBLIC_BASE_URL}/oauth/token`,
-              scopes: { telegram: "Connect and use your Telegram account" },
-            },
-          },
-        },
-      },
-    },
+    // No securitySchemes on purpose: GPT Actions configure auth in the editor
+    // UI and are known to fail ("something went wrong") when the imported
+    // schema also declares an oauth2 scheme. Auth expectations are described
+    // in the operation summaries instead; MCP clients don't read this file.
   };
 }
