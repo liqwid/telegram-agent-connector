@@ -17,6 +17,9 @@ export const generateAccessToken = (): string =>
 export const generateRefreshToken = (): string =>
   `tar_${randomBytes(32).toString("base64url")}`;
 
+export const generateRegistrationToken = (): string =>
+  `rat_${randomBytes(32).toString("base64url")}`;
+
 export const sha256Hex = (value: string): string =>
   createHash("sha256").update(value).digest("hex");
 

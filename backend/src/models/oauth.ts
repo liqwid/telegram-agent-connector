@@ -16,6 +16,7 @@ export const oauthClientSchema = z.object({
     return z.array(z.string()).parse(parsed);
   }),
   authMethod: z.enum(["none", "client_secret_basic", "client_secret_post"]),
+  registrationTokenHash: z.string().nullable(),
   createdAt: z.coerce.date(),
 });
 

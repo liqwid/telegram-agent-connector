@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { logger } from "common/logging";
 
+import { env } from "@/env";
 import { OauthError } from "@/models/oauth";
 import {
   consumeOauthCode,
@@ -11,6 +12,7 @@ import {
   insertOauthCode,
   insertOauthToken,
   rotateOauthToken,
+  updateOauthClientRedirectUris,
 } from "@/repositories/oauthRepository";
 import {
   generateAccessToken,
@@ -18,6 +20,7 @@ import {
   generateClientId,
   generateClientSecret,
   generateRefreshToken,
+  generateRegistrationToken,
   pkceChallengeMatches,
   secretMatches,
   sha256Hex,
@@ -40,12 +43,17 @@ export type RegisteredClient = {
   grant_types: string[];
   response_types: string[];
   token_endpoint_auth_method: string;
+  registration_access_token: string;
+  registration_client_uri: string;
 };
 
 /**
  * RFC 7591 dynamic client registration, open (no initial access token) as the
  * MCP spec expects. Public clients (`token_endpoint_auth_method: none`) get no
  * secret and must use PKCE; confidential ones get a secret, returned once.
+ * The registration access token (also returned once) authorizes later
+ * redirect-URI updates via RFC 7592 — needed because ChatGPT regenerates a
+ * GPT's callback URL whenever its OAuth settings change.
  */
 export async function registerOauthClient(input: {
   clientName: string;
@@ -56,12 +64,14 @@ export async function registerOauthClient(input: {
   const clientId = generateClientId();
   const secret =
     input.tokenEndpointAuthMethod === "none" ? null : generateClientSecret();
+  const registrationToken = generateRegistrationToken();
   await insertOauthClient({
     id: clientId,
     secretHash: secret ? sha256Hex(secret) : null,
     name: input.clientName,
     redirectUris: input.redirectUris,
     authMethod: input.tokenEndpointAuthMethod,
+    registrationTokenHash: sha256Hex(registrationToken),
   });
   logger.info("registerOauthClient: registered", {
     clientId,
@@ -76,7 +86,37 @@ export async function registerOauthClient(input: {
     grant_types: ["authorization_code", "refresh_token"],
     response_types: ["code"],
     token_endpoint_auth_method: input.tokenEndpointAuthMethod,
+    registration_access_token: registrationToken,
+    registration_client_uri: `${env.PUBLIC_BASE_URL}/oauth/register/${clientId}`,
   };
+}
+
+/**
+ * RFC 7592-style client update, limited to the redirect URI list. Authorized
+ * by the registration access token issued at registration — exact-match
+ * redirect validation stays intact while ChatGPT rotates its callback.
+ */
+export async function updateClientRedirectUris(input: {
+  clientId: string;
+  registrationToken: string;
+  redirectUris: string[];
+}): Promise<{ client_id: string; redirect_uris: string[] }> {
+  const client = await findOauthClientById(input.clientId);
+  if (
+    !client ||
+    !client.registrationTokenHash ||
+    !secretMatches(input.registrationToken, client.registrationTokenHash)
+  ) {
+    throw new OauthError(
+      "invalid_client",
+      "Unknown client or bad registration access token",
+    );
+  }
+  await updateOauthClientRedirectUris(input.clientId, input.redirectUris);
+  logger.info("updateClientRedirectUris: updated", {
+    clientId: input.clientId,
+  });
+  return { client_id: input.clientId, redirect_uris: input.redirectUris };
 }
 
 // --------------------------------------------------------------- authorization

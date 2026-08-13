@@ -10,6 +10,7 @@ import {
   OAUTH_SCOPE,
   refreshAccessToken,
   registerOauthClient,
+  updateClientRedirectUris,
   validateAuthorizationRequest,
 } from "@/useCases/oauthFlows";
 import { publicHandler } from "@/utils/handler";
@@ -73,6 +74,35 @@ export const registerClientHandler = publicHandler
     status: HTTPStatus.CREATED,
     body: await registerOauthClient(body),
   }));
+
+const clientUpdateBodySchema = z.object({
+  redirectUris: z.array(z.string().url()).min(1),
+});
+
+const clientPathSchema = z.object({
+  clientId: z.string().min(1),
+});
+
+/**
+ * RFC 7592-style update of a client's redirect URIs, authorized by the
+ * registration access token from the original registration response.
+ */
+export const updateClientHandler = publicHandler
+  .parse({ body: clientUpdateBodySchema, path: clientPathSchema })
+  .handle(async ({ body, path, request }) => {
+    const header = request.header("authorization") ?? "";
+    const registrationToken = header.toLowerCase().startsWith("bearer ")
+      ? header.slice("bearer ".length).trim()
+      : "";
+    return {
+      status: HTTPStatus.OK,
+      body: await updateClientRedirectUris({
+        clientId: path.clientId,
+        registrationToken,
+        redirectUris: body.redirectUris,
+      }),
+    };
+  });
 
 // -------------------------------------------------------------- authorization
 

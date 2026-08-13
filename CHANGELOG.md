@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Client updates (RFC 7592-style).** ChatGPT regenerates a GPT's OAuth
+  callback on every settings edit, making exact-match registration circular.
+  Registration now returns a one-time `registration_access_token` +
+  `registration_client_uri`, and `PUT /oauth/register/:clientId` (bearer:
+  that token) updates the client's redirect URIs — so credentials stay
+  stable while the callback rotates, and redirect validation remains exact
+  match (a briefly-considered wildcard approach was rejected: it could not
+  distinguish one GPT's callback from another's). Migration
+  `0005_client_registration_tokens`.
+
 - **OAuth 2.1 authorization server** — the unlock for real-user distribution
   (Anthropic connector directory, published GPTs, ChatGPT Apps). Discovery
   metadata (RFC 8414 + RFC 9728), open dynamic client registration (RFC 7591,

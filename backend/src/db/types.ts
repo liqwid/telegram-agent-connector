@@ -24,6 +24,8 @@ export interface OauthClientsTable {
   // JSON-encoded string[] of exact redirect URIs.
   redirect_uris: string;
   auth_method: string;
+  // RFC 7592 registration access token (hashed); authorizes client updates.
+  registration_token_hash: string | null;
   created_at: ColumnType<Date, Date | string | undefined, never>;
 }
 

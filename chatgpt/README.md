@@ -65,33 +65,46 @@ Done — the GPT reports which Telegram account is connected.
 The backend is a full OAuth 2.1 server, and GPT Actions support OAuth — this is how
 you turn the personal recipe into a public GPT with durable per-user auth:
 
-1. Create the GPT as above (Authentication: None for now) and **Save** it once —
-   this assigns its id (`g-…` in the URL).
-2. Register an OAuth client for it (the callback URL is derived from the GPT id):
+ChatGPT regenerates the callback URL every time a GPT's OAuth settings change, so
+the order matters: register a client first (credentials never change), configure
+the GPT, then point the client's redirect at whatever callback ChatGPT settled on.
+
+1. Register an OAuth client (placeholder redirect — it gets corrected in step 4):
    ```bash
    curl -X POST https://tgagent.grownow.tech/oauth/register \
      -H 'content-type: application/json' \
      -d '{
        "clientName": "Telegram GPT",
-       "redirectUris": ["https://chat.openai.com/aip/<YOUR-GPT-ID>/oauth/callback"],
+       "redirectUris": ["https://chat.openai.com/aip/pending/oauth/callback"],
        "tokenEndpointAuthMethod": "client_secret_basic"
      }'
    ```
-   Save the returned `client_id` and `client_secret` — the secret is shown once.
-3. In the GPT's Action, switch **Authentication** to **OAuth** and fill in:
-   - Client ID / Client Secret: from step 2
+   The response contains `client_id`, `client_secret`, and a
+   `registration_access_token` — all shown once; save all three.
+2. Create the GPT as above, and in its Action switch **Authentication** to
+   **OAuth**:
+   - Client ID / Client Secret: from step 1
    - Authorization URL: `https://tgagent.grownow.tech/oauth/authorize`
    - Token URL: `https://tgagent.grownow.tech/oauth/token`
    - Scope: `telegram`
    - Token exchange method: Basic authorization header
-4. Verify the callback URL ChatGPT now displays matches the one you registered
-   (`https://chat.openai.com/aip/<gpt-id>/oauth/callback`); if it differs, register a
-   client with the displayed value.
-5. Update the GPT's instructions to use the OAuth operations (`getMyStatus`,
-   `startMyQrLogin`, `submitMyPassword`, `disconnectMe`) instead of the
-   `createAccount`/accountId ones — no token juggling needed.
-6. Share the GPT (**Anyone with the link** or the GPT Store; public listing requires
-   a privacy policy URL — use `https://tgagent.grownow.tech/legal`).
+3. **Save/Update the GPT.** The Action panel now displays the final Callback URL —
+   copy it.
+4. Point the client at that exact callback (repeat this step any time you edit the
+   GPT's OAuth settings and the callback rotates):
+   ```bash
+   curl -X PUT https://tgagent.grownow.tech/oauth/register/<CLIENT_ID> \
+     -H 'content-type: application/json' \
+     -H 'Authorization: Bearer <REGISTRATION_ACCESS_TOKEN>' \
+     -d '{"redirectUris": ["<CALLBACK URL FROM STEP 3>"]}'
+   ```
+5. Use [`gpt-instructions-oauth.md`](./gpt-instructions-oauth.md) as the GPT's
+   instructions — the OAuth operations (`getMyStatus`, `startMyQrLogin`,
+   `submitMyPassword`, `disconnectMe`), no token juggling.
+6. Test from a normal chat (not the editor preview — OAuth sign-in does not work
+   there), then share the GPT (**Anyone with the link** or the GPT Store; public
+   listing requires a privacy policy URL — use
+   `https://tgagent.grownow.tech/privacy`).
 
 Users who open the GPT get ChatGPT's standard "Sign in" prompt → this backend's
 approval page → then the QR-scan flow. Their session persists across conversations.

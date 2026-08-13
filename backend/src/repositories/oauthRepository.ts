@@ -17,6 +17,7 @@ export async function insertOauthClient(input: {
   name: string;
   redirectUris: string[];
   authMethod: string;
+  registrationTokenHash: string;
 }): Promise<OauthClient> {
   logger.info("insertOauthClient: inserting", {
     clientId: input.id,
@@ -30,10 +31,26 @@ export async function insertOauthClient(input: {
       name: input.name,
       redirect_uris: JSON.stringify(input.redirectUris),
       auth_method: input.authMethod,
+      registration_token_hash: input.registrationTokenHash,
     })
     .returningAll()
     .executeTakeFirstOrThrow();
   return parseItemStrict(oauthClientSchema, row);
+}
+
+export async function updateOauthClientRedirectUris(
+  clientId: string,
+  redirectUris: string[],
+): Promise<void> {
+  logger.info("updateOauthClientRedirectUris: updating", {
+    clientId,
+    count: redirectUris.length,
+  });
+  await getDb()
+    .updateTable("oauth_clients")
+    .set({ redirect_uris: JSON.stringify(redirectUris) })
+    .where("id", "=", clientId)
+    .execute();
 }
 
 export async function findOauthClientById(

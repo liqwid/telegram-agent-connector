@@ -31,6 +31,7 @@ import {
   protectedResourceMetadataHandler,
   registerClientHandler,
   tokenHandler,
+  updateClientHandler,
 } from "@/controllers/oauth";
 import { env } from "@/env";
 import {
@@ -88,6 +89,7 @@ export function createApp(): express.Express {
     protectedResourceMetadataHandler,
   );
   app.post("/oauth/register", registerClientHandler);
+  app.put("/oauth/register/:clientId", updateClientHandler);
   app.get("/oauth/authorize", authorizePageHandler);
   app.post("/oauth/authorize", authorizeDecisionHandler);
   app.post("/oauth/token", tokenHandler);
