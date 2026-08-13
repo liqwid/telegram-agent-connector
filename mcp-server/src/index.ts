@@ -82,13 +82,15 @@ const requireCredentials = (): Credentials => {
   return credentials;
 };
 
-const scanInstructions = (loginTtlSeconds: number, connectPage: string) =>
-  textContent(
-    "Scan this QR with the Telegram app: Settings → Devices → Link Desktop Device. " +
-      `The code rotates ~every 30s (login window ${loginTtlSeconds}s); call telegram_qr() ` +
-      "if it expires, then telegram_status() to check progress. " +
-      `Fallback link if the image is not visible: ${connectPage}`,
-  );
+const connectPageUrl = (credentials: Credentials): string =>
+  `${credentials.backendUrl}/connect/${credentials.accountId}` +
+  `?token=${encodeURIComponent(credentials.accountToken)}`;
+
+const scanText = (credentials: Credentials, lead: string): string =>
+  `${lead} Send the user this link — it shows the QR code and refreshes it automatically: ` +
+  `${connectPageUrl(credentials)} — they should open it and scan with the Telegram app ` +
+  "(Settings → Devices → Link Desktop Device). A QR image is also attached in case this " +
+  "client displays images. Then call telegram_status() to check progress.";
 
 async function findReusableAccount(): Promise<Credentials | null> {
   const credentials = loadCredentials();
@@ -123,7 +125,12 @@ async function connectAndShowQr(): Promise<ToolResult> {
   const png = await fetchQrPng(credentials);
   return toolResult(
     ...(png ? [imageContent(png)] : []),
-    scanInstructions(started.loginTtlSeconds, started.connectPage),
+    textContent(
+      scanText(
+        credentials,
+        `QR login started (window ${started.loginTtlSeconds}s, code rotates ~every 30s).`,
+      ),
+    ),
   );
 }
 
@@ -177,7 +184,7 @@ server.registerTool(
       }
       return toolResult(
         imageContent(png),
-        textContent("Fresh QR code — ask the user to scan it."),
+        textContent(scanText(credentials, "Fresh QR code.")),
       );
     }),
 );
@@ -198,7 +205,17 @@ server.registerTool(
         path: `/v1/accounts/${credentials.accountId}`,
         credentials,
       });
-      return toolResult(textContent(JSON.stringify(status, null, 2)));
+      const guidance =
+        status.status === "waiting_scan"
+          ? scanText(credentials, "Still waiting for the scan.")
+          : status.status === "password_needed"
+            ? "The account has 2FA — ask the user for their Telegram cloud password and call telegram_password()."
+            : status.status === "authorized"
+              ? "Connected — report the Telegram user back."
+              : "No active login — call telegram_connect() to start one.";
+      return toolResult(
+        textContent(`${JSON.stringify(status, null, 2)}\n\n${guidance}`),
+      );
     }),
 );
 

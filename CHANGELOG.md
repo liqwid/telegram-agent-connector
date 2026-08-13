@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **QR page link in every MCP response.** claude.ai does not render image tool
+  content, so the inline QR was invisible there. All scan-related tool
+  responses (`telegram_connect`, `telegram_qr`, and `telegram_status` while
+  `waiting_scan`) now lead with the hosted QR-page link (auto-refreshing) and
+  the server instructions tell the model to always hand the user that link
+  instead of assuming the attached image is visible. The inline PNG stays as a
+  bonus for clients that do render it. Applied to both the hosted connector
+  and the local stdio bridge; `telegram_status` also gained per-status
+  guidance text.
+
 - **Hosted MCP connector — zero-install Claude setup.** The backend now serves
   a stateless Streamable-HTTP MCP endpoint at `POST /mcp/:accountToken` with
   the same five tools as the local bridge (QR returned as inline image), each

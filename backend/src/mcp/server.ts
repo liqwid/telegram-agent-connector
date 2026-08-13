@@ -3,6 +3,7 @@ import { CustomError } from "common";
 import { logger } from "common/logging";
 import { z } from "zod";
 
+import { env } from "@/env";
 import type { AccountWithTokenHash } from "@/models/account";
 import { findAccountWithTokenHashById } from "@/repositories/accountRepository";
 import { renderQrPng } from "@/services/qrImage";
@@ -65,6 +66,25 @@ const freshAccount = async (
 ): Promise<AccountWithTokenHash> =>
   (await findAccountWithTokenHashById(account.id)) ?? account;
 
+/**
+ * The hosted QR page — the one path that works in every client. Many MCP
+ * clients (claude.ai among them) do not render image tool content, so every
+ * tool response that expects a scan leads with this link; the inline PNG is
+ * a bonus for clients that do display it.
+ */
+const connectPageUrl = (accountId: string, accountToken: string): string =>
+  `${env.PUBLIC_BASE_URL}/connect/${accountId}?token=${encodeURIComponent(accountToken)}`;
+
+const scanText = (
+  accountId: string,
+  accountToken: string,
+  lead: string,
+): string =>
+  `${lead} Send the user this link — it shows the QR code and refreshes it automatically: ` +
+  `${connectPageUrl(accountId, accountToken)} — they should open it and scan with the Telegram app ` +
+  "(Settings → Devices → Link Desktop Device). A QR image is also attached in case this client displays " +
+  "images. Then call telegram_status() to check progress.";
+
 const qrWithInstructions = async (
   account: AccountWithTokenHash,
   accountToken: string,
@@ -74,10 +94,11 @@ const qrWithInstructions = async (
   return toolResult(
     imageContent(png),
     textContent(
-      "Scan this QR with the Telegram app: Settings → Devices → Link Desktop Device. " +
-        `The code rotates ~every 30s (login window ${started.loginTtlSeconds}s); call telegram_qr() ` +
-        "if it expires, then telegram_status() to check progress. " +
-        `Fallback link if the image is not visible: ${started.connectPage}`,
+      scanText(
+        account.id,
+        accountToken,
+        `QR login started (window ${started.loginTtlSeconds}s, code rotates ~every 30s).`,
+      ),
     ),
   );
 };
@@ -90,10 +111,11 @@ export function buildMcpServer(
     { name: "telegram-connector", version: "0.1.0" },
     {
       instructions:
-        "Connect this user's Telegram account. Flow: telegram_connect() -> show the returned " +
-        "QR image to the user -> telegram_status() until 'authorized'. If status is " +
-        "'password_needed', ask the user for their 2FA password and call telegram_password(). " +
-        "If the QR expires, call telegram_qr() for a fresh one. No credentials are needed.",
+        "Connect this user's Telegram account. Flow: telegram_connect() -> ALWAYS send the user " +
+        "the QR page link from the tool response (inline images do not render in many clients — " +
+        "never assume the user can see an attached image) -> telegram_status() until 'authorized'. " +
+        "If status is 'password_needed', ask the user for their 2FA password and call " +
+        "telegram_password(). If the QR expires, call telegram_qr(). No credentials are needed.",
     },
   );
 
@@ -124,14 +146,15 @@ export function buildMcpServer(
     "telegram_qr",
     {
       description:
-        "Get the current QR code image for a login in progress (the code rotates ~every 30s).",
+        "Get a fresh QR code (image + link to the QR page) for a login in progress " +
+        "(the code rotates ~every 30s).",
       inputSchema: {},
     },
     () =>
       runTool(async () =>
         toolResult(
           imageContent(await renderQrPng(getActiveQrUrl(account.id))),
-          textContent("Fresh QR code — ask the user to scan it."),
+          textContent(scanText(account.id, accountToken, "Fresh QR code.")),
         ),
       ),
   );
@@ -141,21 +164,25 @@ export function buildMcpServer(
     {
       description:
         "Check the Telegram connection status: not_started, waiting_scan, password_needed " +
-        "(ask the user for their 2FA password), authorized, expired, or error.",
+        "(ask the user for their 2FA password), authorized, expired, or error. While a scan " +
+        "is pending, the response repeats the QR page link — keep it in front of the user.",
       inputSchema: {},
     },
     () =>
-      runTool(async () =>
-        toolResult(
-          textContent(
-            JSON.stringify(
-              getAccountStatus(await freshAccount(account)),
-              null,
-              2,
-            ),
-          ),
-        ),
-      ),
+      runTool(async () => {
+        const status = getAccountStatus(await freshAccount(account));
+        const guidance =
+          status.status === "waiting_scan"
+            ? scanText(account.id, accountToken, "Still waiting for the scan.")
+            : status.status === "password_needed"
+              ? "The account has 2FA — ask the user for their Telegram cloud password and call telegram_password()."
+              : status.status === "authorized"
+                ? "Connected — report the Telegram user back."
+                : "No active login — call telegram_connect() to start one.";
+        return toolResult(
+          textContent(`${JSON.stringify(status, null, 2)}\n\n${guidance}`),
+        );
+      }),
   );
 
   server.registerTool(
