@@ -35,10 +35,63 @@ const jsonBody = (schema: z.ZodType) => {
   };
 };
 
-const jsonResponse = (description: string) => ({
+// ChatGPT's schema validator requires `properties` on every object schema —
+// responses are spelled out fully, no bare {type: "object"}.
+const jsonResponse = (description: string, properties: object) => ({
   description,
-  content: { "application/json": { schema: { type: "object" } } },
+  content: {
+    "application/json": { schema: { type: "object", properties } },
+  },
 });
+
+const statusProperties = {
+  accountId: { type: "string" },
+  status: {
+    type: "string",
+    description:
+      "not_started | waiting_scan | password_needed | authorized | expired | error",
+  },
+  telegramUser: {
+    type: "object",
+    description: "Set once authorized",
+    properties: {
+      id: { type: "string" },
+      username: { type: "string" },
+      firstName: { type: "string" },
+    },
+  },
+  qrExpiresAt: { type: "string" },
+  passwordHint: { type: "string" },
+  error: { type: "string" },
+};
+
+const startedQrProperties = {
+  accountId: { type: "string" },
+  status: { type: "string" },
+  qrUrl: { type: "string", description: "Raw tg://login URL" },
+  qrExpiresAt: { type: "string" },
+  pngUrl: { type: "string", description: "QR image (PNG) URL" },
+  connectPage: {
+    type: "string",
+    description: "Auto-refreshing hosted QR page — send this link to the user",
+  },
+  loginTtlSeconds: { type: "number" },
+  passwordHint: { type: "string" },
+  error: { type: "string" },
+};
+
+const createdAccountProperties = {
+  accountId: { type: "string" },
+  accountToken: {
+    type: "string",
+    description: "Bearer token for all account-scoped calls; shown only once",
+  },
+  next: { type: "string" },
+};
+
+const deletedProperties = {
+  deleted: { type: "string", description: "Id of the deleted account" },
+};
 
 export function buildOpenApiSpec() {
   return {
@@ -56,7 +109,9 @@ export function buildOpenApiSpec() {
           operationId: "createAccount",
           summary:
             "Register a new account slot. No input needed. Returns accountId and the one-time accountToken — keep both.",
-          responses: { "201": jsonResponse("Account created") },
+          responses: {
+            "201": jsonResponse("Account created", createdAccountProperties),
+          },
         },
       },
       "/v1/accounts/{accountId}/qr": {
@@ -65,7 +120,9 @@ export function buildOpenApiSpec() {
           summary:
             "Start (or restart) a QR login. Send the user the connectPage URL from the response — the page shows the QR and auto-refreshes it.",
           parameters: [accountIdParameter],
-          responses: { "200": jsonResponse("QR login started") },
+          responses: {
+            "200": jsonResponse("QR login started", startedQrProperties),
+          },
         },
       },
       "/v1/accounts/{accountId}/qr.png": {
@@ -89,14 +146,18 @@ export function buildOpenApiSpec() {
           summary:
             "Login/session status: not_started, waiting_scan, password_needed, authorized, expired, or error. Poll this while the user scans.",
           parameters: [accountIdParameter],
-          responses: { "200": jsonResponse("Current status") },
+          responses: {
+            "200": jsonResponse("Current status", statusProperties),
+          },
         },
         delete: {
           operationId: "disconnectAccount",
           summary:
             "Log out of Telegram and delete the account and its credentials. Destructive — confirm with the user first.",
           parameters: [accountIdParameter],
-          responses: { "200": jsonResponse("Account deleted") },
+          responses: {
+            "200": jsonResponse("Account deleted", deletedProperties),
+          },
         },
       },
       "/v1/me": {
@@ -104,13 +165,17 @@ export function buildOpenApiSpec() {
           operationId: "getMyStatus",
           summary:
             "OAuth: login/session status for the authenticated user: not_started, waiting_scan, password_needed, authorized, expired, or error. Poll this while the user scans.",
-          responses: { "200": jsonResponse("Current status") },
+          responses: {
+            "200": jsonResponse("Current status", statusProperties),
+          },
         },
         delete: {
           operationId: "disconnectMe",
           summary:
             "OAuth: log out of Telegram and delete the authenticated user's account. Destructive — confirm with the user first.",
-          responses: { "200": jsonResponse("Account deleted") },
+          responses: {
+            "200": jsonResponse("Account deleted", deletedProperties),
+          },
         },
       },
       "/v1/me/qr": {
@@ -118,7 +183,9 @@ export function buildOpenApiSpec() {
           operationId: "startMyQrLogin",
           summary:
             "OAuth: start (or restart) a QR login for the authenticated user. Send the user the connectPage URL from the response — the page shows the QR and auto-refreshes it.",
-          responses: { "200": jsonResponse("QR login started") },
+          responses: {
+            "200": jsonResponse("QR login started", startedQrProperties),
+          },
         },
       },
       "/v1/me/password": {
@@ -127,7 +194,9 @@ export function buildOpenApiSpec() {
           summary:
             "OAuth: complete a 2FA-protected login with the user's Telegram cloud password (when status is password_needed).",
           requestBody: jsonBody(submitPasswordBodySchema),
-          responses: { "200": jsonResponse("Password accepted") },
+          responses: {
+            "200": jsonResponse("Password accepted", statusProperties),
+          },
         },
       },
       "/v1/accounts/{accountId}/password": {
@@ -137,7 +206,9 @@ export function buildOpenApiSpec() {
             "Complete a 2FA-protected login with the user's Telegram cloud password (when status is password_needed).",
           parameters: [accountIdParameter],
           requestBody: jsonBody(submitPasswordBodySchema),
-          responses: { "200": jsonResponse("Password accepted") },
+          responses: {
+            "200": jsonResponse("Password accepted", statusProperties),
+          },
         },
       },
     },
