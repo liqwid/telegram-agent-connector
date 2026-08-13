@@ -106,6 +106,7 @@ export function createApp(): express.Express {
   app.get("/openapi.json", openApiHandler);
   app.get("/logo.png", logoHandler);
   app.get("/legal", legalHandler);
+  app.get("/privacy", legalHandler);
   app.get("/healthz", healthHandler);
 
   app.use(notFoundHandler);
