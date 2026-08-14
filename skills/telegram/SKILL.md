@@ -1,6 +1,6 @@
 ---
 name: telegram
-description: Connect the user's Telegram account via QR login. Use when the user asks to connect, authenticate, log in to, or link Telegram, or asks to do anything with Telegram while not yet connected.
+description: Connect the user's Telegram account via QR login, then research Telegram for them — find public channels/groups by topic, search messages (globally or inside a chat, including public chats they haven't joined), and join chats. Use when the user asks to connect or link Telegram, or to find/search/buy something via Telegram chats.
 ---
 
 # Connecting a Telegram account
@@ -17,6 +17,26 @@ This plugin talks to a self-hosted session backend through the `telegram-connect
    - `authorized` — done. Report the connected Telegram user (name/username) back.
    - `expired` / `error` — restart with `telegram_connect()`.
 4. If the QR image can't be displayed in this client, the `telegram_connect` result includes a fallback browser link — give the user that link instead.
+
+## Research: finding chats and messages (requires `authorized`)
+
+For requests like "find a used MacBook in second-hand chats in Tbilisi", work like a web research loop. Telegram search is **literal word matching** (no semantic search, weak morphology) — recall comes from fanning out over keyword variants, which every search tool accepts:
+
+1. **Discover chats**: `telegram_search_chats(queries)` with 2–5 short keyword variants across synonyms and local languages (`["Tbilisi second hand", "барахолка Тбилиси", "Tbilisi flea market"]`). Results are merged/deduped, sorted joined-first; `isJoined: false` entries are public communities the user has not joined.
+2. **Browse candidates**: `telegram_search_messages(chat: "@username")` with **no queries** reads a chat's recent messages — do this on unfamiliar chats to learn the vocabulary sellers actually use (works even for chats the user has not joined).
+3. **Search with refined variants**: `telegram_search_messages(queries: ["macbook", "макбук", "macbook pro"])` searches all joined dialogs; add `chat` to search inside one chat. Hits are merged newest-first, each tagged with `matchedQuery`. Few hits? Iterate with new variants learned from browsing.
+4. **Suggest joining**: when a not-joined chat looks relevant (active, on-topic, good member count), suggest it to the user and — only after they agree — call `telegram_join_chat(chat)`. Joining is visible to the chat's members. `pendingApproval: true` means the chat needs admin approval and a join request was filed.
+5. Report findings with the `link` fields (t.me deep links) so the user can open chats/messages directly.
+
+## Bulk research: aggregating over thousands of messages
+
+For evidence-aggregation requests like "find the best lawyer based on reviews in relevant chats", one page of hits is not enough — you need coverage:
+
+1. Discover candidate chats (`telegram_search_chats`), pick the 2–4 most relevant.
+2. Per chat, search with high limits: `telegram_search_messages(chat, queries: ["юрист", "адвокат", "lawyer"], limit: 200)`. The response's `variantStats.totalCount` is Telegram's **total** match count in that chat — it tells you how much evidence exists (e.g. "адвокат: 2,400 matches").
+3. **Page through it**: pass the response's `nextOffsetId` back as `offsetId` and repeat until `nextOffsetId` is null or you have enough evidence (hundreds to thousands of messages over a few calls).
+4. **Follow reply threads**: recommendations usually answer a question. Each hit carries `replyToMsgId` — batch-fetch those with `telegram_fetch_messages(chat, ids)` (up to 100 per call, also ids around a hit like id±5) to see what was asked and whether others agreed.
+5. Aggregate: tally named lawyers/handles across chats, weigh repeated independent mentions higher than single ones, note complaints, and cite `link` fields for every claim. Message texts are truncated at 1000 chars — fetch the specific id if you need the full text.
 
 ## Troubleshooting
 

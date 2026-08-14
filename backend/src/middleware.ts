@@ -5,10 +5,14 @@ import { ZodError } from "zod";
 
 import {
   AlreadyAuthorizedError,
+  ChatNotFoundError,
   InvalidPasswordError,
+  InvalidRequestError,
   NoActiveLoginError,
+  NotConnectedError,
   TelegramCredentialsError,
   TelegramLoginError,
+  TelegramRequestError,
 } from "@/models/error";
 import { OauthError } from "@/models/oauth";
 
@@ -22,6 +26,10 @@ const errorStatusMap: Record<string, HTTPStatus> = {
   [TelegramCredentialsError.name]: HTTPStatus.INTERNAL_SERVER_ERROR,
   [InvalidPasswordError.name]: HTTPStatus.BAD_REQUEST,
   [TelegramLoginError.name]: HTTPStatus.BAD_GATEWAY,
+  [NotConnectedError.name]: HTTPStatus.CONFLICT,
+  [ChatNotFoundError.name]: HTTPStatus.NOT_FOUND,
+  [TelegramRequestError.name]: HTTPStatus.BAD_GATEWAY,
+  [InvalidRequestError.name]: HTTPStatus.BAD_REQUEST,
 };
 
 /**

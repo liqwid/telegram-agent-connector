@@ -19,3 +19,15 @@ export class InvalidPasswordError extends CustomError {}
 
 /** The QR login flow failed on the Telegram side (502). */
 export class TelegramLoginError extends CustomError {}
+
+/** The account has no usable Telegram session — connect first (409). */
+export class NotConnectedError extends CustomError {}
+
+/** The referenced chat could not be resolved or accessed (404). */
+export class ChatNotFoundError extends CustomError {}
+
+/** Telegram rejected or failed an API request (502). */
+export class TelegramRequestError extends CustomError {}
+
+/** The request parameters make no sense together (400). */
+export class InvalidRequestError extends CustomError {}

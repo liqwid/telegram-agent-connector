@@ -37,6 +37,66 @@ export const accountStatusSchema = z.object({
 
 export type AccountStatus = z.infer<typeof accountStatusSchema>;
 
+export const chatSummarySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  username: z.string().nullable(),
+  kind: z.string(),
+  memberCount: z.number().nullable(),
+  isJoined: z.boolean(),
+  link: z.string().nullable(),
+});
+
+export const chatSearchResultSchema = z.object({
+  queries: z.array(z.string()),
+  chats: z.array(chatSummarySchema),
+});
+
+export const messageHitSchema = z.object({
+  chat: z
+    .object({
+      id: z.string(),
+      title: z.string(),
+      username: z.string().nullable(),
+    })
+    .nullable(),
+  messageId: z.number(),
+  sentAt: z.string().nullable(),
+  senderName: z.string().nullable(),
+  text: z.string(),
+  replyToMsgId: z.number().nullable(),
+  matchedQuery: z.string().nullable(),
+  link: z.string().nullable(),
+});
+
+export const messageSearchResultSchema = z.object({
+  queries: z.array(z.string()),
+  scope: z.string(),
+  chat: chatSummarySchema.nullable(),
+  variantStats: z
+    .array(
+      z.object({
+        query: z.string().nullable(),
+        totalCount: z.number().nullable(),
+        fetched: z.number(),
+      }),
+    )
+    .nullable(),
+  nextOffsetId: z.number().nullable(),
+  messages: z.array(messageHitSchema),
+});
+
+export const messageFetchResultSchema = z.object({
+  chat: chatSummarySchema,
+  messages: z.array(messageHitSchema),
+});
+
+export const joinChatResultSchema = z.object({
+  joined: z.boolean(),
+  pendingApproval: z.boolean(),
+  chat: chatSummarySchema.nullable(),
+});
+
 export class BackendError extends Error {}
 
 const errorBodySchema = z.object({ message: z.string() });

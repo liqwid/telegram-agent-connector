@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+- **Chat discovery & research.** Authorized accounts can now answer requests
+  like "find a used MacBook in second-hand chats in Tbilisi": public
+  channel/group discovery by topic keywords (`contacts.Search` — includes
+  chats the user has *not* joined, flagged `isJoined: false` so assistants can
+  suggest joining them), message search (global across joined dialogs via
+  `messages.SearchGlobal`, or inside one chat via `messages.Search` — public
+  chats are searchable without joining), and joining chats by @username or
+  invite link (approval-gated chats report `pendingApproval`). Exposed three
+  ways: REST (`GET /v1/{accounts/:id,me}/chats/search`,
+  `GET …/messages/search`, `POST …/chats/join`, documented in the OpenAPI
+  spec for GPT Actions), hosted MCP connector, and the local stdio bridge
+  (`telegram_search_chats`, `telegram_search_messages`, `telegram_join_chat` —
+  join tool instructs models to confirm with the user first). Stored sessions
+  are exercised by short-lived per-request clients
+  (`services/telegramSession`), translating dead sessions to a 409
+  "reconnect" error and flood waits / other RPC failures to 502.
+  Because Telegram search is literal word matching (no semantics, weak
+  morphology), all search endpoints do web-search-style research instead of
+  single exact queries: they fan out over up to 5 keyword variants (repeated
+  or comma-separated `q` on REST, `queries[]` on MCP — the LLM supplies
+  synonym/language variants), merge and dedupe the results (chats
+  joined-first; messages newest-first, each hit tagged `matchedQuery`), and
+  message search with a `chat` but no query browses the chat's recent history
+  (`messages.GetHistory`) so models can learn a community's vocabulary before
+  searching it. Tool/spec descriptions teach the loop: discover → browse →
+  refine variants → report t.me links.
+  Chat-scoped search/browse is built for bulk aggregation research ("best
+  lawyer based on reviews in relevant chats"): the backend pages internally
+  (100/RPC, sequentially per variant to stay flood-safe) up to `limit=300`
+  messages per variant per call, reports `variantStats` with Telegram's total
+  match count per variant, and returns a `nextOffsetId` cursor
+  (`offsetId` request param) so callers walk thousands of messages across
+  successive calls; hit texts are truncated at 1000 chars to keep digests
+  compact. Each hit carries `replyToMsgId`, and a new fetch-by-id operation
+  (`GET /v1/{accounts/:id,me}/messages/get`, MCP `telegram_fetch_messages`,
+  ≤100 ids/call) pulls reply-thread context — the question a recommendation
+  answers — for public chats without joining.
+
 - **Client updates (RFC 7592-style).** ChatGPT regenerates a GPT's OAuth
   callback on every settings edit, making exact-match registration circular.
   Registration now returns a one-time `registration_access_token` +

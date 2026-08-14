@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { submitPasswordBodySchema } from "@/controllers/accounts";
+import { joinChatBodySchema } from "@/controllers/chats";
 import { env } from "@/env";
 
 /**
@@ -92,6 +93,165 @@ const createdAccountProperties = {
 const deletedProperties = {
   deleted: { type: "string", description: "Id of the deleted account" },
 };
+
+const stringQueryParameter = (
+  name: string,
+  required: boolean,
+  description: string,
+) => ({
+  name,
+  in: "query",
+  required,
+  description,
+  schema: { type: "string" },
+});
+
+const chatSummaryProperties = {
+  id: { type: "string" },
+  title: { type: "string" },
+  username: { type: "string" },
+  kind: { type: "string", description: "channel | group" },
+  memberCount: { type: "number" },
+  isJoined: {
+    type: "boolean",
+    description:
+      "false = a public chat the user has not joined — searchable directly via the messages/search endpoint, or suggest joining it",
+  },
+  link: { type: "string", description: "Public t.me link when available" },
+};
+
+const chatSummarySchema = { type: "object", properties: chatSummaryProperties };
+
+const chatSearchResultProperties = {
+  queries: { type: "array", items: { type: "string" } },
+  chats: { type: "array", items: chatSummarySchema },
+};
+
+const messageHitProperties = {
+  chat: {
+    type: "object",
+    properties: {
+      id: { type: "string" },
+      title: { type: "string" },
+      username: { type: "string" },
+    },
+  },
+  messageId: { type: "number" },
+  sentAt: { type: "string" },
+  senderName: { type: "string" },
+  text: { type: "string" },
+  replyToMsgId: {
+    type: "number",
+    description:
+      "Id of the message this one replies to — fetch it for thread context",
+  },
+  matchedQuery: {
+    type: "string",
+    description: "Which query variant found this hit; absent in browse mode",
+  },
+  link: { type: "string", description: "t.me deep link when available" },
+};
+
+const messageListSchema = {
+  type: "array",
+  items: { type: "object", properties: messageHitProperties },
+};
+
+const messageSearchResultProperties = {
+  queries: { type: "array", items: { type: "string" } },
+  scope: { type: "string", description: "global | chat" },
+  chat: chatSummarySchema,
+  variantStats: {
+    type: "array",
+    description:
+      "Per-variant coverage (chat scope only): totalCount is Telegram's total match count in the chat, fetched is how many this call returned",
+    items: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        totalCount: { type: "number" },
+        fetched: { type: "number" },
+      },
+    },
+  },
+  nextOffsetId: {
+    type: "number",
+    description:
+      "Pass as offsetId on the next call to page deeper into history; null when exhausted",
+  },
+  messages: messageListSchema,
+};
+
+const messageFetchResultProperties = {
+  chat: chatSummarySchema,
+  messages: messageListSchema,
+};
+
+const joinChatResultProperties = {
+  joined: { type: "boolean" },
+  pendingApproval: {
+    type: "boolean",
+    description: "True when the chat requires admin approval to join",
+  },
+  chat: chatSummarySchema,
+};
+
+const searchChatsSummary =
+  "Find public Telegram channels/groups by topic. Telegram search is literal word matching, so pass 2-5 comma-separated keyword variants (synonyms + local languages, e.g. 'Tbilisi second hand, барахолка Тбилиси') — results are merged and deduped. Entries with isJoined=false are chats the user has not joined — search them directly via messages/search with the chat parameter, or suggest joining.";
+
+const searchMessagesSummary =
+  "Research Telegram messages like a web search: pass 2-5 comma-separated query variants (synonyms, other languages — e.g. 'юрист, адвокат, lawyer'); results merge newest-first with matchedQuery per hit. No 'chat' = across all joined dialogs; with 'chat' (@username/t.me link) = inside that chat, which works for public chats the user has NOT joined, pages internally up to limit=300 per variant, and returns variantStats (Telegram's total match counts) plus nextOffsetId — pass it back as offsetId to walk thousands of messages across calls. 'chat' with no 'q' = browse the chat's recent messages to learn its vocabulary before searching. For aggregation research (e.g. best lawyer from reviews), page through hits, follow replyToMsgId for thread context, tally mentions, cite t.me links.";
+
+const fetchMessagesSummary =
+  "Fetch specific messages from a chat by id (up to 100) — pull reply-thread context around search hits (replyToMsgId is usually the question a recommendation answers; ids around a hit reconstruct the conversation). Works for public chats without joining.";
+
+const joinChatSummary =
+  "Join a chat by public @username or t.me invite link. Visible to the chat's members — confirm with the user first.";
+
+const searchChatsParameters = [
+  stringQueryParameter(
+    "q",
+    true,
+    "Comma-separated keyword variants (max 5), e.g. 'Tbilisi second hand, барахолка Тбилиси'",
+  ),
+  stringQueryParameter(
+    "limit",
+    false,
+    "Max results per variant (1-50, default 15)",
+  ),
+];
+
+const searchMessagesParameters = [
+  stringQueryParameter(
+    "q",
+    false,
+    "Comma-separated query variants (max 5), e.g. 'юрист, адвокат, lawyer'. Omit (with chat set) to browse the chat's recent messages",
+  ),
+  stringQueryParameter(
+    "chat",
+    false,
+    "Optional @username or t.me link to search or browse within",
+  ),
+  stringQueryParameter(
+    "limit",
+    false,
+    "Max messages per variant (1-300, default 20; high limits only work inside a chat)",
+  ),
+  stringQueryParameter(
+    "offsetId",
+    false,
+    "Resume cursor: the nextOffsetId from a previous chat-scoped response",
+  ),
+];
+
+const fetchMessagesParameters = [
+  stringQueryParameter("chat", true, "@username or t.me link of the chat"),
+  stringQueryParameter(
+    "ids",
+    true,
+    "Comma-separated message ids (max 100), e.g. '120,121,145'",
+  ),
+];
 
 export function buildOpenApiSpec() {
   return {
@@ -196,6 +356,99 @@ export function buildOpenApiSpec() {
           requestBody: jsonBody(submitPasswordBodySchema),
           responses: {
             "200": jsonResponse("Password accepted", statusProperties),
+          },
+        },
+      },
+      "/v1/me/chats/search": {
+        get: {
+          operationId: "searchMyChats",
+          summary: `OAuth: ${searchChatsSummary}`,
+          parameters: searchChatsParameters,
+          responses: {
+            "200": jsonResponse("Matching chats", chatSearchResultProperties),
+          },
+        },
+      },
+      "/v1/me/messages/search": {
+        get: {
+          operationId: "searchMyMessages",
+          summary: `OAuth: ${searchMessagesSummary}`,
+          parameters: searchMessagesParameters,
+          responses: {
+            "200": jsonResponse(
+              "Matching messages",
+              messageSearchResultProperties,
+            ),
+          },
+        },
+      },
+      "/v1/me/messages/get": {
+        get: {
+          operationId: "fetchMyMessages",
+          summary: `OAuth: ${fetchMessagesSummary}`,
+          parameters: fetchMessagesParameters,
+          responses: {
+            "200": jsonResponse(
+              "Requested messages",
+              messageFetchResultProperties,
+            ),
+          },
+        },
+      },
+      "/v1/me/chats/join": {
+        post: {
+          operationId: "joinMyChat",
+          summary: `OAuth: ${joinChatSummary}`,
+          requestBody: jsonBody(joinChatBodySchema),
+          responses: {
+            "200": jsonResponse("Join outcome", joinChatResultProperties),
+          },
+        },
+      },
+      "/v1/accounts/{accountId}/chats/search": {
+        get: {
+          operationId: "searchChats",
+          summary: searchChatsSummary,
+          parameters: [accountIdParameter, ...searchChatsParameters],
+          responses: {
+            "200": jsonResponse("Matching chats", chatSearchResultProperties),
+          },
+        },
+      },
+      "/v1/accounts/{accountId}/messages/search": {
+        get: {
+          operationId: "searchMessages",
+          summary: searchMessagesSummary,
+          parameters: [accountIdParameter, ...searchMessagesParameters],
+          responses: {
+            "200": jsonResponse(
+              "Matching messages",
+              messageSearchResultProperties,
+            ),
+          },
+        },
+      },
+      "/v1/accounts/{accountId}/messages/get": {
+        get: {
+          operationId: "fetchMessages",
+          summary: fetchMessagesSummary,
+          parameters: [accountIdParameter, ...fetchMessagesParameters],
+          responses: {
+            "200": jsonResponse(
+              "Requested messages",
+              messageFetchResultProperties,
+            ),
+          },
+        },
+      },
+      "/v1/accounts/{accountId}/chats/join": {
+        post: {
+          operationId: "joinChat",
+          summary: joinChatSummary,
+          parameters: [accountIdParameter],
+          requestBody: jsonBody(joinChatBodySchema),
+          responses: {
+            "200": jsonResponse("Join outcome", joinChatResultProperties),
           },
         },
       },

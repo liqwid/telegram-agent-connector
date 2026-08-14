@@ -9,6 +9,16 @@ import {
   startQrHandler,
   submitPasswordHandler,
 } from "@/controllers/accounts";
+import {
+  fetchMessagesHandler,
+  joinChatHandler,
+  meFetchMessagesHandler,
+  meJoinChatHandler,
+  meSearchChatsHandler,
+  meSearchMessagesHandler,
+  searchChatsHandler,
+  searchMessagesHandler,
+} from "@/controllers/chats";
 import { connectPageHandler } from "@/controllers/connectPage";
 import {
   aiPluginHandler,
@@ -64,6 +74,12 @@ export function createApp(): express.Express {
   app.post("/v1/accounts/:accountId/password", submitPasswordHandler);
   app.delete("/v1/accounts/:accountId", deleteAccountHandler);
 
+  // Chat discovery & research (requires an authorized Telegram session)
+  app.get("/v1/accounts/:accountId/chats/search", searchChatsHandler);
+  app.post("/v1/accounts/:accountId/chats/join", joinChatHandler);
+  app.get("/v1/accounts/:accountId/messages/search", searchMessagesHandler);
+  app.get("/v1/accounts/:accountId/messages/get", fetchMessagesHandler);
+
   // Hosted QR page (ChatGPT fallback / no-inline-image clients)
   app.get("/connect/:accountId", connectPageHandler);
 
@@ -99,6 +115,10 @@ export function createApp(): express.Express {
   app.post("/v1/me/qr", meStartQrHandler);
   app.post("/v1/me/password", meSubmitPasswordHandler);
   app.delete("/v1/me", meDisconnectHandler);
+  app.get("/v1/me/chats/search", meSearchChatsHandler);
+  app.post("/v1/me/chats/join", meJoinChatHandler);
+  app.get("/v1/me/messages/search", meSearchMessagesHandler);
+  app.get("/v1/me/messages/get", meFetchMessagesHandler);
 
   // Onboarding landing page — creates a connector URL in one click
   app.get("/", homePageHandler);
