@@ -68,7 +68,8 @@
 - **OpenAPI import fixes for ChatGPT Actions.** Zod's `"$schema"` stamp is now
   stripped from request-body schemas and the `qr.png` response declares a
   proper binary schema — both tripped ChatGPT's Actions schema validator on
-  import.
+  import. Operation summaries are also kept under the importer's 300-char cap
+  (long research guidance moved to `description`), enforced by a spec test.
 
 - **QR page link in every MCP response.** claude.ai does not render image tool
   content, so the inline QR was invisible there. All scan-related tool

@@ -196,14 +196,25 @@ const joinChatResultProperties = {
   chat: chatSummarySchema,
 };
 
+// ChatGPT's Actions importer caps operation summaries at 300 chars — the
+// detailed guidance goes in `description` (unlimited, still read by models).
 const searchChatsSummary =
-  "Find public Telegram channels/groups by topic. Telegram search is literal word matching, so pass 2-5 comma-separated keyword variants (synonyms + local languages, e.g. 'Tbilisi second hand, барахолка Тбилиси') — results are merged and deduped. Entries with isJoined=false are chats the user has not joined — search them directly via messages/search with the chat parameter, or suggest joining.";
+  "Find public Telegram channels/groups by topic keyword variants (comma-separated, max 5) — includes chats the user has not joined.";
+
+const searchChatsDescription =
+  "Telegram search is literal word matching, so pass 2-5 comma-separated keyword variants (synonyms + local languages, e.g. 'Tbilisi second hand, барахолка Тбилиси') — results are merged and deduped. Entries with isJoined=false are chats the user has not joined — search them directly via messages/search with the chat parameter, or suggest joining.";
 
 const searchMessagesSummary =
+  "Search or browse Telegram messages: globally across joined dialogs, or inside one chat (public chats work without joining). Supports comma-separated query variants and offsetId pagination for bulk research.";
+
+const searchMessagesDescription =
   "Research Telegram messages like a web search: pass 2-5 comma-separated query variants (synonyms, other languages — e.g. 'юрист, адвокат, lawyer'); results merge newest-first with matchedQuery per hit. No 'chat' = across all joined dialogs; with 'chat' (@username/t.me link) = inside that chat, which works for public chats the user has NOT joined, pages internally up to limit=300 per variant, and returns variantStats (Telegram's total match counts) plus nextOffsetId — pass it back as offsetId to walk thousands of messages across calls. 'chat' with no 'q' = browse the chat's recent messages to learn its vocabulary before searching. For aggregation research (e.g. best lawyer from reviews), page through hits, follow replyToMsgId for thread context, tally mentions, cite t.me links.";
 
 const fetchMessagesSummary =
-  "Fetch specific messages from a chat by id (up to 100) — pull reply-thread context around search hits (replyToMsgId is usually the question a recommendation answers; ids around a hit reconstruct the conversation). Works for public chats without joining.";
+  "Fetch specific messages from a chat by id (up to 100) — pull reply-thread context around search hits. Works for public chats without joining.";
+
+const fetchMessagesDescription =
+  "A hit's replyToMsgId is usually the question a recommendation answers; fetching ids around a hit (e.g. hit id ±5) reconstructs the conversation. Also useful to read the full text of a message the search digest truncated.";
 
 const joinChatSummary =
   "Join a chat by public @username or t.me invite link. Visible to the chat's members — confirm with the user first.";
@@ -363,6 +374,7 @@ export function buildOpenApiSpec() {
         get: {
           operationId: "searchMyChats",
           summary: `OAuth: ${searchChatsSummary}`,
+          description: searchChatsDescription,
           parameters: searchChatsParameters,
           responses: {
             "200": jsonResponse("Matching chats", chatSearchResultProperties),
@@ -373,6 +385,7 @@ export function buildOpenApiSpec() {
         get: {
           operationId: "searchMyMessages",
           summary: `OAuth: ${searchMessagesSummary}`,
+          description: searchMessagesDescription,
           parameters: searchMessagesParameters,
           responses: {
             "200": jsonResponse(
@@ -386,6 +399,7 @@ export function buildOpenApiSpec() {
         get: {
           operationId: "fetchMyMessages",
           summary: `OAuth: ${fetchMessagesSummary}`,
+          description: fetchMessagesDescription,
           parameters: fetchMessagesParameters,
           responses: {
             "200": jsonResponse(
@@ -409,6 +423,7 @@ export function buildOpenApiSpec() {
         get: {
           operationId: "searchChats",
           summary: searchChatsSummary,
+          description: searchChatsDescription,
           parameters: [accountIdParameter, ...searchChatsParameters],
           responses: {
             "200": jsonResponse("Matching chats", chatSearchResultProperties),
@@ -419,6 +434,7 @@ export function buildOpenApiSpec() {
         get: {
           operationId: "searchMessages",
           summary: searchMessagesSummary,
+          description: searchMessagesDescription,
           parameters: [accountIdParameter, ...searchMessagesParameters],
           responses: {
             "200": jsonResponse(
@@ -432,6 +448,7 @@ export function buildOpenApiSpec() {
         get: {
           operationId: "fetchMessages",
           summary: fetchMessagesSummary,
+          description: fetchMessagesDescription,
           parameters: [accountIdParameter, ...fetchMessagesParameters],
           responses: {
             "200": jsonResponse(
