@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Public landing page** (`landing/index.html`). Single self-contained page:
+  what connecting grants, an illustrative search demo, the three-step connect
+  flow, and the connector URL as the one thing to copy. Named TGAgent and
+  carrying the "unofficial client built on the Telegram API" disclosure, per
+  the Telegram API Terms of Service (2.2 disclosure, 2.3 naming, 2.4 no
+  Telegram logo or brand colour).
+
 - **Chat discovery & research.** Authorized accounts can now answer requests
   like "find a used MacBook in second-hand chats in Tbilisi": public
   channel/group discovery by topic keywords (`contacts.Search` — includes
