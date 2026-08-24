@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- **Landing page: removed what the product cannot do.** An audit of every claim
+  on the page against `origin/main` (the deployed code) found the page selling
+  features that do not exist.
+  Removed: the "The point isn't the QR code" section and its demo card — a
+  fabricated assistant exchange with invented chats, listings, prices and
+  dates, closing on *"Want me to open a thread with the seller?"*. Production
+  has no tool that sends anything (`mcp/server.ts` registers connect, qr,
+  status, password, search_chats, search_messages, fetch_messages, join_chat,
+  logout — and nothing else), and the scope section two screens below said so
+  outright, so the page contradicted itself.
+  Removed: the invented timing "About a minute, most of it finding your phone".
+  Corrected: "it prints a QR code straight into the chat" → the connector
+  answers with an image *or a link to one*; many clients render neither inline.
+  Fixed dead and misleading links: "Read the source →" and the footer "Source"
+  pointed at `#source`, an id that never existed on the page — both now go to
+  the repository. The footer "Privacy" link pointed at `#grants`, a marketing
+  section, while no privacy policy exists — the link is gone rather than
+  lying about what it leads to.
+  Also removed the masthead ToS 2.2 disclosure at the owner's request; the
+  fuller disclosure, with the trademark notice, remains in the footer.
+  ⚠️ **Two claims on the page are true only until the pending work ships.**
+  "It cannot send messages as you — there is no tool that sends, edits,
+  forwards or deletes a message" becomes false the moment the `sendMessage`
+  work in progress reaches production. That card must be rewritten in the same
+  release, not after it.
+
 - **The landing page is served in production at `/`.** `deploy/landing/index.html`
   (the page from the `landing` branch) is installed to `/var/www/tac-landing/`
   by `remote-deploy.sh` and served by two exact-match nginx locations, so `/`
