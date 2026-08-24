@@ -21,6 +21,12 @@
   description and an inline SVG favicon are now injected into the payload head
   in the file itself. ⚠️ **Regenerating the bundle drops that edit** — re-apply
   it, or the production tab goes back to reading "Bundled Page".
+  The first deploy of this failed on its own health assertion while serving the
+  page correctly: `printf | grep -q` inverts under `set -o pipefail`, because
+  grep exits on the first match, closes the pipe, and printf dies of SIGPIPE —
+  so a successful match returned 141. Matched with `case` now. The lesson is
+  the check, not the shell: an assertion that has never been run against a
+  *passing* input is not yet a check.
 
 - **Chat discovery & research.** Authorized accounts can now answer requests
   like "find a used MacBook in second-hand chats in Tbilisi": public

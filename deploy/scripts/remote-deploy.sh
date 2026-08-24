@@ -104,14 +104,23 @@ health_check() {
 
 # A 200 from `/` proves only that something answered; the backend answers
 # there too when the location block is missing. Assert the page's own title.
+#
+# Matched with `case`, not `printf | grep -q`: grep exits on the first match
+# and closes the pipe, printf dies of SIGPIPE, and under `set -o pipefail` that
+# turns a successful match into a failed pipeline. That inversion failed a
+# deploy on 2026-08-24 while the page was being served correctly.
 assert_landing_served() {
   local body
-  body="$(curl -fsS -H 'Host: localhost' http://127.0.0.1/ || true)"
-  if ! printf '%s' "${body}" | grep -q '<title>TGAgent'; then
-    echo "remote-deploy: / is not serving the landing page (got $(printf '%s' "${body}" | head -c 120))" >&2
-    return 1
-  fi
-  echo "remote-deploy: landing OK at /"
+  body="$(curl -fsS http://127.0.0.1/ || true)"
+  case "${body}" in
+    *"<title>TGAgent"*)
+      echo "remote-deploy: landing OK at /"
+      ;;
+    *)
+      echo "remote-deploy: / is not serving the landing page (got: ${body:0:120})" >&2
+      return 1
+      ;;
+  esac
 }
 
 main() {
