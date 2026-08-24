@@ -21,6 +21,8 @@ readonly ECOSYSTEM="${DEPLOY_DIR}/deploy/pm2/ecosystem.config.cjs"
 readonly NGINX_CONF="${DEPLOY_DIR}/deploy/nginx/tac-backend.conf"
 readonly NGINX_SITE="/etc/nginx/sites-available/tac-backend.conf"
 readonly NGINX_SITE_LINK="/etc/nginx/sites-enabled/tac-backend.conf"
+readonly LANDING_SRC="${DEPLOY_DIR}/deploy/landing/index.html"
+readonly LANDING_DIR="/var/www/tac-landing"
 readonly TLS_CERT="/etc/tac/tls/origin.pem"
 readonly TLS_KEY="/etc/tac/tls/origin.key"
 
@@ -72,6 +74,14 @@ install_nginx_vhost() {
   sudo systemctl reload nginx
 }
 
+# The landing page nginx serves at `/`. One self-contained file, installed
+# before the vhost so a fresh server never reloads nginx onto a missing root.
+install_landing_page() {
+  echo "remote-deploy: installing landing page"
+  sudo install -d -m 755 "${LANDING_DIR}"
+  sudo install -m 644 "${LANDING_SRC}" "${LANDING_DIR}/index.html"
+}
+
 configure_firewall() {
   echo "remote-deploy: applying ufw policy (SSH + Cloudflare-only HTTP)"
   sudo SSH_PORT="${SSH_PORT:-22}" bash "${DEPLOY_DIR}/deploy/scripts/configure-firewall.sh"
@@ -92,15 +102,29 @@ health_check() {
   return 1
 }
 
+# A 200 from `/` proves only that something answered; the backend answers
+# there too when the location block is missing. Assert the page's own title.
+assert_landing_served() {
+  local body
+  body="$(curl -fsS -H 'Host: localhost' http://127.0.0.1/ || true)"
+  if ! printf '%s' "${body}" | grep -q '<title>TGAgent'; then
+    echo "remote-deploy: / is not serving the landing page (got $(printf '%s' "${body}" | head -c 120))" >&2
+    return 1
+  fi
+  echo "remote-deploy: landing OK at /"
+}
+
 main() {
   # The bundle is uploaded by the deploy user and stays owned by it. The `tac`
   # service user only needs read+execute access, which rsync's default
   # world-readable perms provide — so no chown is needed (and chowning away from
   # the deploy user would break the next rsync upload).
   reload_pm2_service
+  install_landing_page
   install_nginx_vhost
   configure_firewall
   health_check "http://localhost:8300/healthz"
+  assert_landing_served
   echo "remote-deploy: done"
 }
 

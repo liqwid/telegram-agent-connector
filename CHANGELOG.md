@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **The landing page is served in production at `/`.** `deploy/landing/index.html`
+  (the page from the `landing` branch) is installed to `/var/www/tac-landing/`
+  by `remote-deploy.sh` and served by two exact-match nginx locations, so `/`
+  stops being the backend's plain onboarding page — which called the product
+  "Telegram Agent Connector" and styled its button in Telegram's brand blue
+  `#2481cc`, both forbidden by Telegram API ToS 2.3 and 2.4. Every API path is
+  untouched; `remote-deploy.sh` now asserts, through nginx after the reload,
+  that `/` really returns the landing (a 200 alone proves nothing — the backend
+  answers there too when the location block is missing).
+  Not GitHub Pages: a hostname resolves to one server, and pointing
+  `tgagent.grownow.tech` at Pages would remove `/mcp`, `/oauth/*` and
+  `/.well-known/openai-apps-challenge` — which is exactly what OpenAI's and
+  Anthropic's domain verification fetches.
+  The bundled page had no identity of its own: it replaces `documentElement`
+  with a payload whose `<head>` carried no `<title>`, so the tab showed the
+  bare URL and the pre-unpack placeholder read "Bundled Page". A title, a
+  description and an inline SVG favicon are now injected into the payload head
+  in the file itself. ⚠️ **Regenerating the bundle drops that edit** — re-apply
+  it, or the production tab goes back to reading "Bundled Page".
+
 - **Chat discovery & research.** Authorized accounts can now answer requests
   like "find a used MacBook in second-hand chats in Tbilisi": public
   channel/group discovery by topic keywords (`contacts.Search` — includes
