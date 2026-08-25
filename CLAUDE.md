@@ -41,6 +41,15 @@ Always keep your actions in CHANGELOG.md.
     HTTP statuses.
 - `mcp-server/` — stdio MCP server for Claude; talks to the backend over REST;
   stores only `{accountId, accountToken}` locally.
+- `deploy/landing/index.html` — the public landing page. **Not part of the
+  Express app**: nginx serves it at `/` (two exact-match locations) while every
+  API path proxies to the backend as before, so `controllers/home.ts` now
+  answers only on `:8300`. It is a bundled single file — the real document
+  lives as one JS string literal inside it, so edit it through the
+  decode/edit/re-encode round-trip, never by hand inside the string. The page
+  also states in writing what the connector *cannot* do, so changing what the
+  product can do means changing that copy in the same release. Details, and why
+  it cannot live on a static host: `docs/landing.md`.
 
 ## Commands
 
