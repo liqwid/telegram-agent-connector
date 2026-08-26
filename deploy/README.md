@@ -22,6 +22,20 @@ ecosystem, scripts) redeploy automatically: the workflow rsyncs the whole
                               Postgres (cloud)                 Telegram (MTProto)
 ```
 
+- **nginx serves the landing page at `/`; everything else proxies.** The
+  public page is one self-contained file, `deploy/landing/index.html`,
+  installed to `/var/www/tac-landing/index.html` by `remote-deploy.sh` and
+  matched by two `location =` blocks (`/` and `/index.html`). Every other path
+  — `/mcp`, `/oauth/*`, `/connect`, `/v1/*`, `/openapi.json`, `/.well-known/*`
+  — still reaches the backend untouched.
+  ⚠️ **The site and the API must stay on one origin.** The ChatGPT app
+  directory verifies domain ownership by fetching
+  `/.well-known/openai-apps-challenge` from the MCP host, and the OAuth consent
+  screen has to live on the connector's own domain. That is why the landing is
+  served here rather than from a static host such as GitHub Pages: a hostname
+  points at one server, and moving it to Pages would take `/mcp` down with it.
+  The backend still renders its own onboarding page at `/`, but nginx now wins
+  that path — it is reachable only directly on `:8300`.
 - **Exactly one backend process.** In-flight QR logins (gramjs clients,
   password deferreds) live in process memory — `deploy/pm2/ecosystem.config.cjs`
   pins `exec_mode: "fork"`, `instances: 1`. A deploy restart briefly (<1s)

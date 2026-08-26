@@ -104,6 +104,57 @@
   at 18 and the suite stayed green, which would have shipped a GPT that cannot
   reach the endpoint. The test now asserts the full operationId → path mapping
   (14 contracted operations).
+- **Landing page: removed what the product cannot do.** An audit of every claim
+  on the page against `origin/main` (the deployed code) found the page selling
+  features that do not exist.
+  Removed: the "The point isn't the QR code" section and its demo card — a
+  fabricated assistant exchange with invented chats, listings, prices and
+  dates, closing on *"Want me to open a thread with the seller?"*. Production
+  has no tool that sends anything (`mcp/server.ts` registers connect, qr,
+  status, password, search_chats, search_messages, fetch_messages, join_chat,
+  logout — and nothing else), and the scope section two screens below said so
+  outright, so the page contradicted itself.
+  Removed: the invented timing "About a minute, most of it finding your phone".
+  Corrected: "it prints a QR code straight into the chat" → the connector
+  answers with an image *or a link to one*; many clients render neither inline.
+  Fixed dead and misleading links: "Read the source →" and the footer "Source"
+  pointed at `#source`, an id that never existed on the page — both now go to
+  the repository. The footer "Privacy" link pointed at `#grants`, a marketing
+  section, while no privacy policy exists — the link is gone rather than
+  lying about what it leads to.
+  Also removed the masthead ToS 2.2 disclosure at the owner's request; the
+  fuller disclosure, with the trademark notice, remains in the footer.
+  ⚠️ **Two claims on the page are true only until the pending work ships.**
+  "It cannot send messages as you — there is no tool that sends, edits,
+  forwards or deletes a message" becomes false the moment the `sendMessage`
+  work in progress reaches production. That card must be rewritten in the same
+  release, not after it.
+
+- **The landing page is served in production at `/`.** `deploy/landing/index.html`
+  (the page from the `landing` branch) is installed to `/var/www/tac-landing/`
+  by `remote-deploy.sh` and served by two exact-match nginx locations, so `/`
+  stops being the backend's plain onboarding page — which called the product
+  "Telegram Agent Connector" and styled its button in Telegram's brand blue
+  `#2481cc`, both forbidden by Telegram API ToS 2.3 and 2.4. Every API path is
+  untouched; `remote-deploy.sh` now asserts, through nginx after the reload,
+  that `/` really returns the landing (a 200 alone proves nothing — the backend
+  answers there too when the location block is missing).
+  Not GitHub Pages: a hostname resolves to one server, and pointing
+  `tgagent.grownow.tech` at Pages would remove `/mcp`, `/oauth/*` and
+  `/.well-known/openai-apps-challenge` — which is exactly what OpenAI's and
+  Anthropic's domain verification fetches.
+  The bundled page had no identity of its own: it replaces `documentElement`
+  with a payload whose `<head>` carried no `<title>`, so the tab showed the
+  bare URL and the pre-unpack placeholder read "Bundled Page". A title, a
+  description and an inline SVG favicon are now injected into the payload head
+  in the file itself. ⚠️ **Regenerating the bundle drops that edit** — re-apply
+  it, or the production tab goes back to reading "Bundled Page".
+  The first deploy of this failed on its own health assertion while serving the
+  page correctly: `printf | grep -q` inverts under `set -o pipefail`, because
+  grep exits on the first match, closes the pipe, and printf dies of SIGPIPE —
+  so a successful match returned 141. Matched with `case` now. The lesson is
+  the check, not the shell: an assertion that has never been run against a
+  *passing* input is not yet a check.
 
 - **Chat discovery & research.** Authorized accounts can now answer requests
   like "find a used MacBook in second-hand chats in Tbilisi": public
