@@ -75,6 +75,20 @@
   ⚠️ **Not verified live against a real group.** The dialog lookup is exercised
   through a seam, not against Telegram; a live pass on a private group and a
   basic group is still owed.
+  🚫 **DEPLOY BLOCKER — the landing page says the opposite.**
+  `deploy/landing/index.html` carries, as one of three trust cards: *"It cannot
+  send messages as you — There is no tool that sends, edits, forwards or
+  deletes a message. Nobody in your chats will ever receive something written
+  by the assistant."* That is a false safety claim made at the moment of
+  consent, and three separate rules already demand it be fixed in this very
+  release: `CLAUDE.md` ("changing what the product can do means changing that
+  copy in the same release"), `.claude/rules/knowledge-map.md` (the "changed
+  what the product can do" row), and `docs/landing.md` ("Rewrite that card in
+  the same release that ships sending, not after it"). The rewrite is a
+  deferred owner decision as of 2026-08-26 — **sending must not reach
+  production before it is made.** Two further gaps deferred the same day: no
+  rate limit or post-`PEER_FLOOD` cooldown on the write path, and no
+  code-level break between reading a chat and writing to one (finding 8).
 
 - **Sending messages.** The connector can now write, not only read: one text
   message as the connected user, to a person or a chat.
@@ -103,7 +117,12 @@
   mutation exposed the gap: renaming an Action's path kept the operation count
   at 18 and the suite stayed green, which would have shipped a GPT that cannot
   reach the endpoint. The test now asserts the full operationId → path mapping
-  (14 contracted operations).
+  (20 contracted operations — an earlier revision of this entry said 14, which
+  was simply wrong; `EXPECTED_OPERATIONS` has 20 and so does the document).
+  ⚠️ It guards the routing table, not the SHAPE: the HTTP method, the request
+  body, the response and the parameters are never read, so an operation can
+  keep its path and still ship broken. The `replyToMsgId` defect above was live
+  under a green suite for exactly this reason.
 - **Landing page: removed what the product cannot do.** An audit of every claim
   on the page against `origin/main` (the deployed code) found the page selling
   features that do not exist.
@@ -114,6 +133,12 @@
   status, password, search_chats, search_messages, fetch_messages, join_chat,
   logout — and nothing else), and the scope section two screens below said so
   outright, so the page contradicted itself.
+  ⚠️ **Dated 2026-08-24; superseded 2026-08-26.** "Production has no tool that
+  sends anything" was true when written and is not true of this branch: the
+  entry above ships `telegram_send_message`. The audit's method still holds —
+  claims are checked against deployed code — but the page it produced now
+  under-describes the product in the one direction that matters. See the
+  landing-card blocker recorded under the sending entry.
   Removed: the invented timing "About a minute, most of it finding your phone".
   Corrected: "it prints a QR code straight into the chat" → the connector
   answers with an image *or a link to one*; many clients render neither inline.
