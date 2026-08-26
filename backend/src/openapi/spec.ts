@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { submitPasswordBodySchema } from "@/controllers/accounts";
-import { joinChatBodySchema } from "@/controllers/chats";
+import { joinChatBodySchema, sendMessageBodySchema } from "@/controllers/chats";
 import { env } from "@/env";
 
 /**
@@ -29,7 +29,15 @@ const tokenQueryParameter = {
 const jsonBody = (schema: z.ZodType) => {
   // Zod stamps "$schema" into its output; OpenAPI validators (ChatGPT's
   // Actions importer among them) reject it inside a document — strip it.
-  const { $schema: _ignored, ...jsonSchema } = z.toJSONSchema(schema);
+  //
+  // `io: "input"` describes what a CALLER may send. The default, "output",
+  // describes what parsing produces — and there a field with `.default()` is
+  // always present, so it lands in `required`. That inversion is not cosmetic:
+  // ChatGPT obeys `required`, so a defaulted-nullable field like
+  // `replyToMsgId` would force the model to invent a message id on every send.
+  const { $schema: _ignored, ...jsonSchema } = z.toJSONSchema(schema, {
+    io: "input",
+  });
   return {
     required: true,
     content: { "application/json": { schema: jsonSchema } },
@@ -110,7 +118,7 @@ const chatSummaryProperties = {
   id: { type: "string" },
   title: { type: "string" },
   username: { type: "string" },
-  kind: { type: "string", description: "channel | group" },
+  kind: { type: "string", description: "channel | group | private" },
   memberCount: { type: "number" },
   isJoined: {
     type: "boolean",
@@ -187,6 +195,23 @@ const messageFetchResultProperties = {
   messages: messageListSchema,
 };
 
+const sentMessageProperties = {
+  chat: {
+    type: "object",
+    properties: {
+      id: { type: "string" },
+      title: { type: "string" },
+      username: { type: "string" },
+    },
+    description: "Who actually received it — verify it is the intended person",
+  },
+  messageId: { type: "number" },
+  sentAt: { type: "string", description: "ISO timestamp Telegram recorded" },
+  text: { type: "string", description: "The text as delivered, verbatim" },
+  replyToMsgId: { type: "number" },
+  link: { type: "string", description: "t.me link to the sent message" },
+};
+
 const joinChatResultProperties = {
   joined: { type: "boolean" },
   pendingApproval: {
@@ -217,6 +242,12 @@ const fetchMessagesSummary =
 
 const fetchMessagesDescription =
   "A hit's replyToMsgId is usually the question a recommendation answers; fetching ids around a hit (e.g. hit id ±5) reconstructs the conversation. Also useful to read the full text of a message the search digest truncated.";
+
+const sendMessageSummary =
+  "Send a Telegram message as the user, to a person, group or channel (@username, t.me link, numeric chat id from a search result, or 'me' for Saved Messages). Irreversible and sent in the user's own name.";
+
+const sendMessageDescription =
+  "ALWAYS show the exact recipient and text and get an explicit go-ahead — it cannot be unsent, and in a group everyone sees it. Text is verbatim (no markdown). A chat id reaches any chat the account is in, private groups included; an invite link cannot — join first.";
 
 const joinChatSummary =
   "Join a chat by public @username or t.me invite link. Visible to the chat's members — confirm with the user first.";
@@ -411,6 +442,17 @@ export function buildOpenApiSpec() {
           },
         },
       },
+      "/v1/me/messages/send": {
+        post: {
+          operationId: "sendMyMessage",
+          summary: `OAuth: ${sendMessageSummary}`,
+          description: sendMessageDescription,
+          requestBody: jsonBody(sendMessageBodySchema),
+          responses: {
+            "200": jsonResponse("The sent message", sentMessageProperties),
+          },
+        },
+      },
       "/v1/me/chats/join": {
         post: {
           operationId: "joinMyChat",
@@ -457,6 +499,18 @@ export function buildOpenApiSpec() {
               "Requested messages",
               messageFetchResultProperties,
             ),
+          },
+        },
+      },
+      "/v1/accounts/{accountId}/messages/send": {
+        post: {
+          operationId: "sendMessage",
+          summary: sendMessageSummary,
+          description: sendMessageDescription,
+          parameters: [accountIdParameter],
+          requestBody: jsonBody(sendMessageBodySchema),
+          responses: {
+            "200": jsonResponse("The sent message", sentMessageProperties),
           },
         },
       },

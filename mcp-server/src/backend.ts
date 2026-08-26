@@ -91,6 +91,19 @@ export const messageFetchResultSchema = z.object({
   messages: z.array(messageHitSchema),
 });
 
+export const sentMessageSchema = z.object({
+  chat: z.object({
+    id: z.string(),
+    title: z.string(),
+    username: z.string().nullable(),
+  }),
+  messageId: z.number(),
+  sentAt: z.string().nullable(),
+  text: z.string(),
+  replyToMsgId: z.number().nullable(),
+  link: z.string().nullable(),
+});
+
 export const joinChatResultSchema = z.object({
   joined: z.boolean(),
   pendingApproval: z.boolean(),

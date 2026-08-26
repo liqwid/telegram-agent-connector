@@ -10,8 +10,37 @@ const operationSchema = z.object({
   description: z.string().optional(),
 });
 
+/**
+ * The contract ChatGPT imports: operationId -> path. Counting operations is
+ * not enough — a renamed or dropped path keeps the count and silently ships a
+ * GPT that cannot reach the endpoint, so the mapping itself is asserted.
+ */
+const EXPECTED_OPERATIONS: Record<string, string> = {
+  createAccount: "/v1/accounts",
+  startQrLogin: "/v1/accounts/{accountId}/qr",
+  getQrPng: "/v1/accounts/{accountId}/qr.png",
+  getAccountStatus: "/v1/accounts/{accountId}",
+  disconnectAccount: "/v1/accounts/{accountId}",
+  submitPassword: "/v1/accounts/{accountId}/password",
+  searchChats: "/v1/accounts/{accountId}/chats/search",
+  searchMessages: "/v1/accounts/{accountId}/messages/search",
+  fetchMessages: "/v1/accounts/{accountId}/messages/get",
+  sendMessage: "/v1/accounts/{accountId}/messages/send",
+  joinChat: "/v1/accounts/{accountId}/chats/join",
+  getMyStatus: "/v1/me",
+  disconnectMe: "/v1/me",
+  startMyQrLogin: "/v1/me/qr",
+  submitMyPassword: "/v1/me/password",
+  searchMyChats: "/v1/me/chats/search",
+  searchMyMessages: "/v1/me/messages/search",
+  fetchMyMessages: "/v1/me/messages/get",
+  sendMyMessage: "/v1/me/messages/send",
+  joinMyChat: "/v1/me/chats/join",
+};
+
 const allOperations = (): {
   path: string;
+  operationId: string;
   summary: string;
   description: string | undefined;
 }[] => {
@@ -23,6 +52,7 @@ const allOperations = (): {
       const parsed = operationSchema.parse(operation);
       return {
         path,
+        operationId: parsed.operationId,
         summary: parsed.summary,
         description: parsed.description,
       };
@@ -47,6 +77,18 @@ describe("buildOpenApiSpec", () => {
   });
 
   it("covers the full endpoint surface", () => {
-    expect(allOperations().length).toBeGreaterThanOrEqual(16);
+    expect(allOperations().length).toBeGreaterThanOrEqual(18);
+  });
+
+  it("exposes every contracted operation at its expected path", () => {
+    const byOperationId = new Map(
+      allOperations().map((operation) => [operation.operationId, operation]),
+    );
+    Object.entries(EXPECTED_OPERATIONS).forEach(([operationId, path]) => {
+      expect(
+        byOperationId.get(operationId)?.path,
+        `${operationId} is missing or moved`,
+      ).toBe(path);
+    });
   });
 });

@@ -31,9 +31,9 @@ export const queryListSchema = z
     message: "At least one non-empty query is required",
   });
 
-export type ChatKind = "channel" | "group";
+export type ChatKind = "channel" | "group" | "private";
 
-/** A channel or group as returned by chat search / join operations. */
+/** A channel, group, or private dialog with one person. */
 export type ChatSummary = {
   id: string;
   title: string;

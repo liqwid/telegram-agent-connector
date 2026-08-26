@@ -114,12 +114,19 @@ Or install the repo as a Claude Code plugin (it ships `.claude-plugin/`,
 | `POST /mcp/:token`               | Legacy personal-URL MCP connector                             |
 | `GET/POST /oauth/*`              | OAuth 2.1: register (DCR), authorize (consent), token         |
 | `GET /.well-known/oauth-*`       | OAuth discovery (RFC 8414 + 9728)                             |
+| `POST /v1/{accounts/:id,me}/messages/send` | Send a message as the user (confirm with the user first) |
 | `GET/POST/DELETE /v1/me…`        | OAuth-scoped status / QR / password / disconnect              |
 | `GET /`                          | Onboarding page with setup instructions                       |
 | `GET /openapi.json`              | OpenAPI 3.1 (GPT Actions import, OAuth security scheme)       |
 
 ## Security model
 
+- **Sending is the only write.** Every other endpoint reads. `…/messages/send`
+  speaks in the user's own name, is irreversible, and reaches another person —
+  the tool and Action descriptions instruct assistants to show the exact
+  recipient and text and get an explicit go-ahead before calling it. That is an
+  instruction to a model, not an enforced permission: anyone self-hosting who
+  does not want an assistant able to write should not register the route.
 - **Session strings are AES-256-GCM encrypted at rest** with `ENCRYPTION_SECRET`; a
   stored session is equivalent to a logged-in device, treat the secret accordingly.
 - The Telegram application credentials (`TELEGRAM_API_ID`/`TELEGRAM_API_HASH`) are
