@@ -178,7 +178,7 @@ export function buildMcpServer(account: AccountWithTokenHash): McpServer {
           status.status === "waiting_scan"
             ? scanText(account.id, "Still waiting for the scan.")
             : status.status === "password_needed"
-              ? "The account has 2FA — ask the user for their Telegram cloud password and call telegram_password()."
+              ? "The account has 2FA — send the user the connect page link and ask them to enter their Telegram cloud password there. Only if they cannot open it, take the password in chat and call telegram_password()."
               : status.status === "authorized"
                 ? "Connected — report the Telegram user back."
                 : "No active login — call telegram_connect() to start one.";
@@ -193,8 +193,12 @@ export function buildMcpServer(account: AccountWithTokenHash): McpServer {
     "telegram_password",
     {
       description:
-        "Submit the user's Telegram 2FA (cloud) password to finish a login whose status is " +
-        "'password_needed'. Never store or repeat the password.",
+        "Fallback for submitting the user's Telegram 2FA (cloud) password. PREFER THE " +
+        "CONNECT PAGE: send the user the link from telegram_connect/telegram_qr and let " +
+        "them type the password there — it goes straight to the backend, while a password " +
+        "dictated here is written into this conversation's transcript. Use this tool only " +
+        "if the user cannot open the link or asks to type it here. Never store, repeat or " +
+        "echo the password.",
       inputSchema: { password: z.string().min(1) },
     },
     ({ password }) =>

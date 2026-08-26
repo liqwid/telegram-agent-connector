@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+- **2FA password can be entered in the browser.** The connect page used to
+  detect `password_needed`, remove the QR, stop polling and tell the user to
+  type their Telegram cloud password *back in the chat* — which writes it into
+  a conversation transcript held by the model provider. The page now takes it
+  directly: a password field (with Telegram's own hint, already carried by the
+  polled status as `passwordHint`), posted to the existing
+  `POST /v1/{accounts/:id,me}/password`. The assistant never sees it.
+  - **The token moves to a header for that request.** Everything else on the
+    page authenticates with `?token=`, but this call carries a password, and
+    one credential per access-log line is enough — it goes as
+    `Authorization: Bearer`.
+  - **Polling no longer stops when the password is asked for**, so the page
+    notices when the login completes. A wrong password is reported and retried
+    in place: Telegram re-requests it, so a response still reading
+    `password_needed` means "not accepted", and anything else means the login
+    window died.
+  - **The field is withheld on a channel that would leak it.** Shown only when
+    `X-Forwarded-Proto` reports the visitor on https, or the host is localhost;
+    otherwise the page says so and points back to the chat. The header is
+    trustworthy in the hosted shape specifically — ufw admits Cloudflare only,
+    and Cloudflare overwrites it with the visitor's scheme, which is why the
+    vhost passes it through rather than substituting `$scheme`. ⚠️ A self-hoster
+    behind a header-forwarding proxy gets a client-forgeable value and the
+    check degrades to decoration; `deploy/README.md` now says what to do.
+  - **The chat path stays as a fallback** (owner decision, 2026-08-26), but
+    `telegram_password` on both MCP surfaces, the two OpenAPI password
+    operations and the `password_needed` status guidance now all say to offer
+    the page link first and take the password in chat only if the user cannot
+    open it.
+  Verified: 11 tests in `controllers/connectPage.spec.ts` (106 across the
+  repo), covering the decision and the page built from it — a correct predicate
+  wired to nothing would pass the first alone. Three mutations, each failed and
+  was reverted: neutering the https guard, matching the hostname by substring
+  (`localhost.evil.example`), and moving the token back into the query string.
+  ⚠️ **Not verified live** — no run against a real 2FA-protected account.
+  ⚠️ Password attempts are not rate-limited here, as nothing else is; the check
+  only reaches Telegram, which throttles it, and only while a scanned login is
+  waiting.
+
 - **Tool output stops teaching prompt injection.** Fetched Telegram content and
   the connector's own advice used to arrive in ONE text block — JSON, then our
   imperative prose appended after it. That shape taught the model that text

@@ -396,7 +396,7 @@ export function buildOpenApiSpec() {
         post: {
           operationId: "submitMyPassword",
           summary:
-            "OAuth: complete a 2FA-protected login with the user's Telegram cloud password (when status is password_needed).",
+            "OAuth: complete a 2FA-protected login with the user's Telegram cloud password (when status is password_needed). Prefer sending the user the connectPage link so they type it there — a password dictated to the assistant lands in the conversation transcript.",
           requestBody: jsonBody(submitPasswordBodySchema),
           responses: {
             "200": jsonResponse("Password accepted", statusProperties),
@@ -529,7 +529,7 @@ export function buildOpenApiSpec() {
         post: {
           operationId: "submitPassword",
           summary:
-            "Complete a 2FA-protected login with the user's Telegram cloud password (when status is password_needed).",
+            "Complete a 2FA-protected login with the user's Telegram cloud password (when status is password_needed). Prefer sending the user the connectPage link so they type it there — a password dictated to the assistant lands in the conversation transcript.",
           parameters: [accountIdParameter],
           requestBody: jsonBody(submitPasswordBodySchema),
           responses: {
