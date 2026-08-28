@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createApp } from "@/app";
+import { env } from "@/env";
 
 /**
  * Routes are registered, not merely written. A handler can typecheck, be
@@ -84,6 +85,24 @@ describe("legal pages", () => {
     expect(response.headers.get("content-type")).toContain("text/html");
     expect(heading(await response.text())).toBe(expected);
   });
+
+  /**
+   * Cloudflare rewrites any address it finds into a placeholder restored by
+   * JavaScript, which on 2026-08-28 left the real address nowhere in the
+   * served HTML. The `email_off` markers opt out of that, so the assertion is
+   * that every page publishing the address wraps it — a page that stops
+   * wrapping it goes back to publishing "[email protected]" to anyone who
+   * fetches rather than renders.
+   */
+  it.each(["/privacy", "/terms", "/contact"] as const)(
+    "publishes the contact address on %s in a form Cloudflare leaves alone",
+    async (path) => {
+      const body = await (await fetch(`${baseUrl}${path}`)).text();
+      const wrapped = body.match(/<!--email_off-->([\s\S]*?)<!--\/email_off-->/);
+      expect(wrapped?.[1]).toContain(`mailto:${env.CONTACT_EMAIL}`);
+      expect(wrapped?.[1]).toContain(env.CONTACT_EMAIL);
+    },
+  );
 
   it("links only to pages that exist", async () => {
     const pages = ["/legal", "/privacy", "/terms", "/contact"];

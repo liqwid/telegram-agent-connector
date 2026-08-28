@@ -1,5 +1,5 @@
 import { env } from "@/env";
-import { legalPage } from "@/legal/layout";
+import { legalPage, mailto } from "@/legal/layout";
 
 /**
  * The terms of service, as served on /terms.
@@ -77,6 +77,6 @@ the one on this page; continued use after a change means you accept it.</p>
 
 <h2>Contact</h2>
 <p>Questions about these terms:
-<a href="mailto:${env.CONTACT_EMAIL}">${env.CONTACT_EMAIL}</a>, or see the
+${mailto(env.CONTACT_EMAIL)}, or see the
 <a href="/contact">contact page</a>.</p>`,
   );

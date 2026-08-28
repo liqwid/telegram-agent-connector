@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **The contact address was published in a form nobody could read without
+  JavaScript.** Cloudflare's Scrape Shield rewrites any address it finds into a
+  `/cdn-cgi/l/email-protection` link and a `[email protected]` placeholder,
+  restored in the browser by its own script. Measured on production right after
+  the deploy: `tony@grownow.tech` appeared **nowhere** in the served HTML of
+  `/contact`, and the link Cloudflare substituted returns 404 to anything that
+  fetches the page rather than renders it — a crawler, a store reviewer, curl.
+  On a page whose only job is publishing one address, that is the whole page
+  failing. The three pages that publish it now wrap it in Cloudflare's
+  documented `<!--email_off-->` markers, which needs no dashboard access.
+  A test asserts the wrapper on each page; removing it fails all three.
+
 - **The landing page no longer says the connector cannot send messages.** The
   scope card promising "there is no tool that sends, edits, forwards or deletes
   a message" had been false since sending merged, and it is the claim a
