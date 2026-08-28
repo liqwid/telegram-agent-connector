@@ -1,7 +1,13 @@
+import { Api } from "telegram";
+import { returnBigInt } from "telegram/Helpers.js";
 import { describe, expect, it } from "vitest";
 
 import { type ChatSummary, queryListSchema } from "@/models/chatSearch";
-import { parseChatRef, sortChatSummaries } from "@/services/telegramSearch";
+import {
+  parseChatRef,
+  sortChatSummaries,
+  toUserSummary,
+} from "@/services/telegramSearch";
 
 describe("queryListSchema", () => {
   it("wraps a single query into a list", () => {
@@ -82,5 +88,33 @@ describe("sortChatSummaries", () => {
       "big-public",
       "unknown-size",
     ]);
+  });
+});
+
+describe("toUserSummary", () => {
+  it("describes a private dialog as always reachable", () => {
+    const user = new Api.User({
+      id: returnBigInt(42),
+      firstName: "Сеня",
+      username: "senya",
+    });
+    expect(toUserSummary(user)).toEqual({
+      id: "42",
+      title: "Сеня",
+      username: "senya",
+      kind: "private",
+      memberCount: null,
+      isJoined: true,
+      link: "https://t.me/senya",
+    });
+  });
+
+  it("leaves the link empty for a user without a username", () => {
+    const user = new Api.User({ id: returnBigInt(43), firstName: "Сеня" });
+    expect(toUserSummary(user)?.link).toBeNull();
+  });
+
+  it("returns null for an inaccessible user", () => {
+    expect(toUserSummary(new Api.UserEmpty({ id: returnBigInt(44) }))).toBeNull();
   });
 });

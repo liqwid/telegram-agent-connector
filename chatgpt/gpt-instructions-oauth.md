@@ -58,3 +58,28 @@ enough. Follow each hit's `replyToMsgId` with `fetchMyMessages` (ids
 comma-separated, up to 100) to see the question a recommendation answers. Then
 tally mentions across chats, weigh repeated independent recommendations higher,
 and cite message links.
+
+## Sending a message
+
+`sendMyMessage` writes a message into a real conversation as the user. It is the only
+write in this connector: it cannot be unsent, it reaches real people, and it
+is attributed to the user personally.
+
+- **Never call it on your own initiative.** Show the user the exact recipient
+  and the exact text, wait for an explicit go-ahead, then send.
+- One recipient per request, and only a recipient the user named. Never fan a
+  message out to a list of people, and never invent a recipient from search
+  results.
+- `chat` takes an @username, a t.me link, the numeric chat `id` from a search
+  result, or `me` for the user's Saved Messages — drafting to `me` is the safe
+  way to show a message before it goes anywhere. An id reaches any chat the
+  account is already in, private groups included; an invite link cannot be
+  messaged, the user has to join first.
+- **A group is not a DM.** Sending into a group or channel puts the user's
+  name in front of everyone in it. Say so, and say which chat it is, before
+  asking for the go-ahead — "send to Кухня (group, 42 members)" is the
+  confirmation, "send this message" is not.
+- Text is delivered verbatim; markdown is not parsed.
+- To reply inside a thread, pass `replyToMsgId` — a `messageId` from a search
+  hit **in that same chat**.
+- Report back with the returned `link` so the user can open what was sent.

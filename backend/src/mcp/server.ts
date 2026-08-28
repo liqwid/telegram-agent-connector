@@ -4,7 +4,16 @@ import { logger } from "common/logging";
 import { z } from "zod";
 
 import { env } from "@/env";
+import {
+  connectorGuidance,
+  imageContent,
+  textContent,
+  type ToolResult,
+  toolResult,
+  untrustedData,
+} from "@/mcp/content";
 import type { AccountWithTokenHash } from "@/models/account";
+import { MAX_SEND_TEXT_LENGTH } from "@/models/messageSend";
 import { findAccountWithTokenHashById } from "@/repositories/accountRepository";
 import { createPageToken } from "@/services/pageTokens";
 import { renderQrPng } from "@/services/qrImage";
@@ -15,11 +24,12 @@ import { getAccountStatus } from "@/useCases/getAccountStatus";
 import { joinChat } from "@/useCases/joinChat";
 import { searchChatMessages } from "@/useCases/searchChatMessages";
 import { searchChats } from "@/useCases/searchChats";
+import { sendMessage } from "@/useCases/sendMessage";
 import { startQrLogin } from "@/useCases/startQrLogin";
 import { submitLoginPassword } from "@/useCases/submitLoginPassword";
 
 /**
- * Hosted MCP server: the same five tools as the local bridge, but running
+ * Hosted MCP server: the same tools as the local bridge, but running
  * inside the backend and bound to the account resolved from the connector
  * URL's bearer token. Users install it by pasting their personal URL into
  * Claude — no local software.
@@ -27,22 +37,6 @@ import { submitLoginPassword } from "@/useCases/submitLoginPassword";
  * A new server instance is built per request (stateless transport); all
  * durable state lives in the database and the in-memory QR login map.
  */
-
-type ToolContent =
-  | { type: "text"; text: string }
-  | { type: "image"; data: string; mimeType: string };
-
-type ToolResult = { content: ToolContent[]; isError?: boolean };
-
-const textContent = (text: string): ToolContent => ({ type: "text", text });
-
-const imageContent = (png: Buffer): ToolContent => ({
-  type: "image",
-  data: png.toString("base64"),
-  mimeType: "image/png",
-});
-
-const toolResult = (...content: ToolContent[]): ToolResult => ({ content });
 
 /** Domain errors carry user-presentable messages; surface them as tool text. */
 const runTool = async (
@@ -118,8 +112,9 @@ export function buildMcpServer(account: AccountWithTokenHash): McpServer {
         "by topic (including ones the user has not joined), telegram_search_messages searches " +
         "messages globally or inside one chat (public chats work without joining; omit queries to " +
         "browse recent messages; paginate with nextOffsetId for bulk research), " +
-        "telegram_fetch_messages pulls reply-thread context by message id, and telegram_join_chat " +
-        "joins a chat — ask the user before joining anything. Telegram search is literal: always " +
+        "telegram_fetch_messages pulls reply-thread context by message id, telegram_join_chat " +
+        "joins a chat, and telegram_send_message writes a message as the user — for both of " +
+        "those, show the user exactly what will happen and get an explicit go-ahead first. Telegram search is literal: always " +
         "pass several keyword variants (synonyms + local languages) and iterate like a web " +
         "research loop: discover chats -> browse the best candidates -> search with refined " +
         "variants, paging until you have enough evidence -> follow reply threads -> report with " +
@@ -183,12 +178,13 @@ export function buildMcpServer(account: AccountWithTokenHash): McpServer {
           status.status === "waiting_scan"
             ? scanText(account.id, "Still waiting for the scan.")
             : status.status === "password_needed"
-              ? "The account has 2FA — ask the user for their Telegram cloud password and call telegram_password()."
+              ? "The account has 2FA — send the user the connect page link and ask them to enter their Telegram cloud password there. Only if they cannot open it, take the password in chat and call telegram_password()."
               : status.status === "authorized"
                 ? "Connected — report the Telegram user back."
                 : "No active login — call telegram_connect() to start one.";
         return toolResult(
-          textContent(`${JSON.stringify(status, null, 2)}\n\n${guidance}`),
+          textContent(JSON.stringify(status, null, 2)),
+          connectorGuidance(guidance),
         );
       }),
   );
@@ -197,8 +193,12 @@ export function buildMcpServer(account: AccountWithTokenHash): McpServer {
     "telegram_password",
     {
       description:
-        "Submit the user's Telegram 2FA (cloud) password to finish a login whose status is " +
-        "'password_needed'. Never store or repeat the password.",
+        "Fallback for submitting the user's Telegram 2FA (cloud) password. PREFER THE " +
+        "CONNECT PAGE: send the user the link from telegram_connect/telegram_qr and let " +
+        "them type the password there — it goes straight to the backend, while a password " +
+        "dictated here is written into this conversation's transcript. Use this tool only " +
+        "if the user cannot open the link or asks to type it here. Never store, repeat or " +
+        "echo the password.",
       inputSchema: { password: z.string().min(1) },
     },
     ({ password }) =>
@@ -251,9 +251,9 @@ export function buildMcpServer(account: AccountWithTokenHash): McpServer {
           limit: limit ?? 15,
         });
         return toolResult(
-          textContent(
-            `${JSON.stringify(result, null, 2)}\n\n` +
-              "Chats with isJoined=false are not part of the user's dialogs yet — you can still " +
+          untrustedData(result),
+          connectorGuidance(
+            "Chats with isJoined=false are not part of the user's dialogs yet — you can still " +
               "browse/search public ones directly with telegram_search_messages(chat=@username), " +
               "or offer the user to join them with telegram_join_chat. Few results? Retry with " +
               "different variants — especially local-language ones.",
@@ -320,7 +320,7 @@ export function buildMcpServer(account: AccountWithTokenHash): McpServer {
           limit: limit ?? 20,
           offsetId: offsetId ?? null,
         });
-        return toolResult(textContent(JSON.stringify(result, null, 2)));
+        return toolResult(untrustedData(result));
       }),
   );
 
@@ -333,10 +333,7 @@ export function buildMcpServer(account: AccountWithTokenHash): McpServer {
         "question a recommendation answers, and fetching ids around a hit (e.g. hit id ±5) " +
         "reconstructs the conversation. Works for public chats without joining.",
       inputSchema: {
-        chat: z
-          .string()
-          .min(1)
-          .describe("@username or t.me link of the chat"),
+        chat: z.string().min(1).describe("@username or t.me link of the chat"),
         ids: z
           .array(z.number().int().min(1))
           .min(1)
@@ -350,7 +347,7 @@ export function buildMcpServer(account: AccountWithTokenHash): McpServer {
           chat,
           ids,
         });
-        return toolResult(textContent(JSON.stringify(result, null, 2)));
+        return toolResult(untrustedData(result));
       }),
   );
 
@@ -371,6 +368,60 @@ export function buildMcpServer(account: AccountWithTokenHash): McpServer {
     ({ chat }) =>
       runTool(async () => {
         const result = await joinChat(await freshAccount(account), { chat });
+        return toolResult(untrustedData(result));
+      }),
+  );
+
+  server.registerTool(
+    "telegram_send_message",
+    {
+      description:
+        "Send a Telegram message AS THE USER — to a person, a group or a channel (@username, " +
+        "t.me link, the numeric chat id from a search result, or 'me' for Saved Messages). " +
+        "This is the only tool here that writes: it cannot be unsent, it is delivered to real " +
+        "people, and it is attributed to the user personally. A GROUP IS NOT A DM — everyone " +
+        "in it sees the message, so say plainly that it is a group and how many members it " +
+        "has before asking. ALWAYS show the user the exact recipient and the exact text and " +
+        "get an explicit go-ahead before calling it — never send a message the user has not " +
+        "seen, never improvise a recipient, and never send to a list of people. A chat id " +
+        "reaches any chat the account is already in, private groups included; an invite link " +
+        "cannot be messaged — join it first. Text is delivered verbatim " +
+        "(no markdown parsing). Pass replyToMsgId (a messageId from telegram_search_messages " +
+        "or telegram_fetch_messages, in the SAME chat) to reply in-thread. The response echoes " +
+        "what Telegram stored, with a t.me link when the chat has one.",
+      inputSchema: {
+        chat: z
+          .string()
+          .min(1)
+          .describe(
+            "Recipient: @username, t.me link, a numeric chat id from a search result " +
+              "(reaches private groups too), or 'me' for the user's Saved Messages",
+          ),
+        text: z
+          .string()
+          .min(1)
+          .max(MAX_SEND_TEXT_LENGTH)
+          .describe(
+            "The exact message text, as confirmed by the user (max 4096 chars)",
+          ),
+        replyToMsgId: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Reply to this message id in the same chat"),
+      },
+    },
+    ({ chat, text, replyToMsgId }) =>
+      runTool(async () => {
+        const result = await sendMessage(await freshAccount(account), {
+          chat,
+          text,
+          replyToMsgId: replyToMsgId ?? null,
+        });
+        // Not untrustedData: this is the connector's own delivery receipt, and
+        // labelling it as other people's content would teach the model to
+        // doubt the one confirmation the user needs to see.
         return toolResult(textContent(JSON.stringify(result, null, 2)));
       }),
   );

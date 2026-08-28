@@ -104,6 +104,23 @@ export const toChatSummary = (
   return null;
 };
 
+/**
+ * Describe a private dialog with one person. `isJoined` is true because a
+ * one-to-one dialog is always reachable — there is nothing to join.
+ */
+export const toUserSummary = (user: Api.TypeUser): ChatSummary | null =>
+  user instanceof Api.User
+    ? {
+        id: user.id.toString(),
+        title: userDisplayName(user) ?? "Private chat",
+        username: user.username ?? null,
+        kind: "private",
+        memberCount: null,
+        isJoined: true,
+        link: user.username ? `https://t.me/${user.username}` : null,
+      }
+    : null;
+
 /** Joined chats first, then by audience size — the order agents should read. */
 export const sortChatSummaries = (chats: ChatSummary[]): ChatSummary[] =>
   [...chats].sort((first, second) =>
@@ -147,7 +164,8 @@ const toMessagesPage = (result: Api.messages.TypeMessages): MessagesPage =>
     ? { messages: [], chats: [], users: [] }
     : { messages: result.messages, chats: result.chats, users: result.users };
 
-const userDisplayName = (user: Api.TypeUser): string | null => {
+/** Best human-readable name for a user: full name, else @username. */
+export const userDisplayName = (user: Api.TypeUser): string | null => {
   if (!(user instanceof Api.User)) return null;
   const fullName = [user.firstName, user.lastName]
     .flatMap((part) => (part ? [part] : []))
@@ -341,22 +359,43 @@ type VariantFetch = {
   pages: Api.messages.TypeMessages[];
 };
 
+/**
+ * Resolve anything readable: a channel, a group, or a private dialog with one
+ * person. Reading a one-to-one conversation is as legitimate as reading a
+ * channel — `joinChat` keeps rejecting users, because there is nothing to join.
+ */
 const resolveSearchableChat = async (
   client: TelegramClient,
   chatRef: string,
-): Promise<{ entity: Api.Channel | Api.Chat; summary: ChatSummary }> => {
+): Promise<{
+  entity: Api.User | Api.Channel | Api.Chat;
+  summary: ChatSummary;
+}> => {
   const ref = parseChatRef(chatRef);
   if (ref.kind === "invite") {
     throw new ChatNotFoundError(
       "Private invite links cannot be searched directly — join the chat first, then search it",
     );
   }
-  const entity = await resolvePublicChat(client, ref.username);
-  const summary = toChatSummary(entity, new Set());
-  if (!summary) {
-    throw new ChatNotFoundError(`"${ref.username}" is not an accessible chat`);
+  const resolved = await client.getEntity(ref.username).catch(() => null);
+  const entity = Array.isArray(resolved) ? null : resolved;
+  if (entity instanceof Api.User) {
+    const summary = toUserSummary(entity);
+    if (!summary) {
+      throw new ChatNotFoundError(`"${ref.username}" is not a reachable user`);
+    }
+    return { entity, summary };
   }
-  return { entity, summary };
+  if (entity instanceof Api.Channel || entity instanceof Api.Chat) {
+    const summary = toChatSummary(entity, new Set());
+    if (!summary) {
+      throw new ChatNotFoundError(`"${ref.username}" is not an accessible chat`);
+    }
+    return { entity, summary };
+  }
+  throw new ChatNotFoundError(
+    `No Telegram chat or user found for "${ref.username}" — check the @username or t.me link`,
+  );
 };
 
 /** The searched chat is known — fill it in for hits Telegram did not resolve. */

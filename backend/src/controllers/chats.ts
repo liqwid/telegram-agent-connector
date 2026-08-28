@@ -3,10 +3,12 @@ import { z } from "zod";
 
 import { accountPathSchema } from "@/controllers/accounts";
 import { queryListSchema } from "@/models/chatSearch";
+import { MAX_SEND_TEXT_LENGTH } from "@/models/messageSend";
 import { fetchMessages, MAX_FETCH_IDS } from "@/useCases/fetchMessages";
 import { joinChat } from "@/useCases/joinChat";
 import { searchChatMessages } from "@/useCases/searchChatMessages";
 import { searchChats } from "@/useCases/searchChats";
+import { sendMessage } from "@/useCases/sendMessage";
 import { accountHandler, oauthHandler } from "@/utils/handler";
 
 /**
@@ -62,6 +64,20 @@ export const joinChatBodySchema = z.object({
   chat: z.string().min(1),
 });
 
+/**
+ * The one write into a user's conversations — confirm recipient and text with
+ * the user before posting it (see models/messageSend.ts).
+ */
+export const sendMessageBodySchema = z.object({
+  // @username, t.me link, numeric chat id (any chat the account is in), or
+  // 'me' — resolved in services/telegramSend.ts, which also explains why an
+  // id costs a dialog lookup.
+  chat: z.string().min(1),
+  text: z.string().min(1).max(MAX_SEND_TEXT_LENGTH),
+  // Reply inside the same chat; the id comes from a search hit or fetch.
+  replyToMsgId: z.number().int().min(1).nullable().default(null),
+});
+
 export const searchChatsHandler = accountHandler
   .parse({ query: searchChatsQuerySchema, path: accountPathSchema })
   .handleAuthorized(async ({ auth, query }) => ({
@@ -101,6 +117,17 @@ export const joinChatHandler = accountHandler
     body: await joinChat(auth.account, { chat: body.chat }),
   }));
 
+export const sendMessageHandler = accountHandler
+  .parse({ body: sendMessageBodySchema, path: accountPathSchema })
+  .handleAuthorized(async ({ auth, body }) => ({
+    status: HTTPStatus.OK,
+    body: await sendMessage(auth.account, {
+      chat: body.chat,
+      text: body.text,
+      replyToMsgId: body.replyToMsgId,
+    }),
+  }));
+
 export const meSearchChatsHandler = oauthHandler
   .parse({ query: searchChatsQuerySchema })
   .handleAuthorized(async ({ auth, query }) => ({
@@ -138,4 +165,15 @@ export const meJoinChatHandler = oauthHandler
   .handleAuthorized(async ({ auth, body }) => ({
     status: HTTPStatus.OK,
     body: await joinChat(auth.account, { chat: body.chat }),
+  }));
+
+export const meSendMessageHandler = oauthHandler
+  .parse({ body: sendMessageBodySchema })
+  .handleAuthorized(async ({ auth, body }) => ({
+    status: HTTPStatus.OK,
+    body: await sendMessage(auth.account, {
+      chat: body.chat,
+      text: body.text,
+      replyToMsgId: body.replyToMsgId,
+    }),
   }));

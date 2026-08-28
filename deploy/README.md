@@ -36,6 +36,22 @@ ecosystem, scripts) redeploy automatically: the workflow rsyncs the whole
   points at one server, and moving it to Pages would take `/mcp` down with it.
   The backend still renders its own onboarding page at `/`, but nginx now wins
   that path — it is reachable only directly on `:8300`.
+- **`X-Forwarded-Proto` gates the 2FA password field.** The connect page shows
+  a password input only when the visitor is on https, and it decides that from
+  `X-Forwarded-Proto` (`controllers/connectPage.ts`). Here the header is
+  trustworthy: ufw admits 80/443 from Cloudflare's ranges only, and Cloudflare
+  overwrites the header with the **visitor's** scheme — which is why the vhost
+  passes it through instead of substituting `$scheme`, since `$scheme` would
+  describe the Cloudflare-to-origin hop and hide the field from an https
+  visitor.
+  ⚠️ **Self-hosting outside this shape:** if you put the backend behind a proxy
+  that forwards client headers verbatim, the header is client-controlled and
+  the check becomes decoration — a man-in-the-middle can strip TLS and forge
+  `X-Forwarded-Proto: https`. Terminate TLS in front of the backend and set the
+  header yourself (`proxy_set_header X-Forwarded-Proto $scheme;`), or accept
+  that the password should be entered through the assistant instead. Running
+  the backend directly on `localhost` needs nothing — that case is trusted
+  because the traffic never leaves the machine.
 - **Exactly one backend process.** In-flight QR logins (gramjs clients,
   password deferreds) live in process memory — `deploy/pm2/ecosystem.config.cjs`
   pins `exec_mode: "fork"`, `instances: 1`. A deploy restart briefly (<1s)
@@ -78,7 +94,7 @@ Two projects, two service tokens; GitHub Actions holds only the tokens
 | Doppler project   | Consumed by            | Secrets                                                                                                                                                                            |
 | ----------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tac-deploy/prd`  | workflow only          | `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `SSH_PORT` (opt), `TLS_DOMAIN` (opt¹), `CLOUDFLARE_API_TOKEN` (opt¹), `LETSENCRYPT_EMAIL` (opt)                                         |
-| `tac-backend/prd` | service (+ migrations) | `DATABASE_URL`, `ENCRYPTION_SECRET`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `PUBLIC_BASE_URL`, `PORT=8300`, `NODE_ENV=production`, `CORS_ORIGIN` (opt), `LOGIN_TTL_SECONDS` (opt) |
+| `tac-backend/prd` | service (+ migrations) | `DATABASE_URL`, `ENCRYPTION_SECRET`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `PUBLIC_BASE_URL`, `PORT=8300`, `NODE_ENV=production`, `CORS_ORIGIN` (opt), `LOGIN_TTL_SECONDS` (opt), `CONTACT_EMAIL` (published on the legal pages) |
 
 ¹ `TLS_DOMAIN` (e.g. `tg.example.com`) and `CLOUDFLARE_API_TOKEN` together
 enable automatic Let's Encrypt provisioning in bootstrap. The token needs

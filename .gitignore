@@ -6,3 +6,12 @@ dist/
 .DS_Store
 data/
 *.session
+
+# local agent workspace — working agreements, briefs, secrets (never committed)
+.claude
+CLAUDE.local.md
+helpers
+
+# local-only working documents (security review, ToS assessment, briefs)
+docs
+.idea
