@@ -19,9 +19,14 @@
     "three things it can do, three things it cannot" became "four things it can
     do, two it cannot". Nothing computes that sentence and nothing fails when
     it goes stale; `docs/landing.md` now says so.
+  - **The hero paragraph says it too.** It listed search, reading threads and
+    answering with links and stopped there — not false, but the first screen
+    is where a visitor decides what this thing is, and the most consequential
+    capability was two screens further down. It now ends "— and send one as
+    you, when you ask it to".
   - Verified in a browser against a local copy of the production serving shape:
-    four IT CAN cards, two IT CANNOT, the payload re-encode byte-identical, no
-    dead anchors, console clean.
+    four IT CAN cards, two IT CANNOT, the hero wrapping cleanly, the payload
+    re-encode byte-identical, no dead anchors, console clean.
 
 - **The legal pages are four pages, not one document on two routes.** `/legal`
   and `/privacy` were the same handler serving one document that carried the
