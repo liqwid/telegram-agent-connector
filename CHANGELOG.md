@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **The landing page no longer says the connector cannot send messages.** The
+  scope card promising "there is no tool that sends, edits, forwards or deletes
+  a message" had been false since sending merged, and it is the claim a
+  cautious visitor reads most carefully. It now describes what actually
+  happens: one message at a time, from your account, to a chat you name; the
+  assistant is instructed to show the exact recipient and text and wait — and
+  **that is a rule it follows, not a check the backend enforces**. The
+  remaining half stays, because it is still true: nothing can edit, forward or
+  delete (`editMessage`/`forwardMessage`/`deleteMessage` appear nowhere in the
+  codebase).
+  - **The card had to change groups, not just wording.** The section tags
+    `never` cards with IT CANNOT and `grants` cards with IT CAN, so a rewrite
+    in place would have left the tag arguing with the body. It moved into the
+    `grants` group — and the section's intro counted the cards in prose, so
+    "three things it can do, three things it cannot" became "four things it can
+    do, two it cannot". Nothing computes that sentence and nothing fails when
+    it goes stale; `docs/landing.md` now says so.
+  - Verified in a browser against a local copy of the production serving shape:
+    four IT CAN cards, two IT CANNOT, the payload re-encode byte-identical, no
+    dead anchors, console clean.
+
 - **The legal pages are four pages, not one document on two routes.** `/legal`
   and `/privacy` were the same handler serving one document that carried the
   privacy policy, the contact address and a one-paragraph terms section
