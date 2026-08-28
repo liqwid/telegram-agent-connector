@@ -94,7 +94,7 @@ Two projects, two service tokens; GitHub Actions holds only the tokens
 | Doppler project   | Consumed by            | Secrets                                                                                                                                                                            |
 | ----------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tac-deploy/prd`  | workflow only          | `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `SSH_PORT` (opt), `TLS_DOMAIN` (opt¹), `CLOUDFLARE_API_TOKEN` (opt¹), `LETSENCRYPT_EMAIL` (opt)                                         |
-| `tac-backend/prd` | service (+ migrations) | `DATABASE_URL`, `ENCRYPTION_SECRET`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `PUBLIC_BASE_URL`, `PORT=8300`, `NODE_ENV=production`, `CORS_ORIGIN` (opt), `LOGIN_TTL_SECONDS` (opt) |
+| `tac-backend/prd` | service (+ migrations) | `DATABASE_URL`, `ENCRYPTION_SECRET`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `PUBLIC_BASE_URL`, `PORT=8300`, `NODE_ENV=production`, `CORS_ORIGIN` (opt), `LOGIN_TTL_SECONDS` (opt), `CONTACT_EMAIL` (published on the legal pages) |
 
 ¹ `TLS_DOMAIN` (e.g. `tg.example.com`) and `CLOUDFLARE_API_TOKEN` together
 enable automatic Let's Encrypt provisioning in bootstrap. The token needs

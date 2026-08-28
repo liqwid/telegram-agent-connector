@@ -25,11 +25,16 @@ import { connectPageHandler } from "@/controllers/connectPage";
 import {
   aiPluginHandler,
   healthHandler,
-  legalHandler,
   logoHandler,
   openApiHandler,
 } from "@/controllers/discovery";
 import { homePageHandler } from "@/controllers/home";
+import {
+  contactHandler,
+  legalHandler,
+  privacyHandler,
+  termsHandler,
+} from "@/controllers/legal";
 import {
   meDisconnectHandler,
   meStartQrHandler,
@@ -131,8 +136,12 @@ export function createApp(): express.Express {
   app.get("/.well-known/ai-plugin.json", aiPluginHandler);
   app.get("/openapi.json", openApiHandler);
   app.get("/logo.png", logoHandler);
+  // Legal pages — one route each; /legal is the hub the ChatGPT plugin
+  // manifest points at as legal_info_url.
   app.get("/legal", legalHandler);
-  app.get("/privacy", legalHandler);
+  app.get("/privacy", privacyHandler);
+  app.get("/terms", termsHandler);
+  app.get("/contact", contactHandler);
   app.get("/healthz", healthHandler);
 
   app.use(notFoundHandler);

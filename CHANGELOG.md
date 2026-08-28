@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- **The legal pages are four pages, not one document on two routes.** `/legal`
+  and `/privacy` were the same handler serving one document that carried the
+  privacy policy, the contact address and a one-paragraph terms section
+  together, and `/terms` and `/contact` did not exist at all. Now each has its
+  own route, its own page and a shared shell (`backend/src/legal/`):
+  - **`/privacy`** — the policy as it was, minus the terms, plus the clause the
+    send tool made necessary: message text now flows through this service in
+    both directions, and the policy says outgoing text is not stored either.
+  - **`/terms`** — new, drafted by unrolling the paragraph that used to sit at
+    the bottom of the policy. Says plainly that the assistant can send as you,
+    that the confirmation before sending is an instruction to the assistant and
+    **not a check the backend performs**, and that use is subject to Telegram's
+    own terms. ⚠️ Not reviewed by a lawyer.
+  - **`/contact`** — new; publishes `CONTACT_EMAIL` and says what it is for.
+  - **`/legal`** — now a hub linking the other three. It stays a page rather
+    than a redirect because the ChatGPT plugin manifest publishes it as
+    `legal_info_url`, and a reviewer following that one link has to reach
+    everything from it.
+  - **The landing page footer links to all four**, which it previously did not
+    do for any of them (edited through the documented bundle round-trip; the
+    re-encode was asserted byte-identical before the edit).
+  - **A routing test asserts the four serve four DISTINCT documents**, and that
+    no page links to a path that 404s. Verified by mutation: re-pointing
+    `/privacy` at the hub handler, deleting the `/terms` route, and mistyping
+    one `href` each produced a failure (1, 2 and 1 respectively).
+  - ⚠️ **Fixed while in there:** `/logo.png` encoded a QR pointing at
+    `github.com/tonypopov/telegram-agent-connector`, which is a 404 — the repo
+    is `liqwid/`. `CONTACT_EMAIL` was also undocumented; it is now in
+    `.env.example` and the Doppler table in `deploy/README.md`.
+
 - **2FA password can be entered in the browser.** The connect page used to
   detect `password_needed`, remove the QR, stop polling and tell the user to
   type their Telegram cloud password *back in the chat* — which writes it into
