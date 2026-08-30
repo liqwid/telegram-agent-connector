@@ -1,5 +1,5 @@
 import { env } from "@/env";
-import { legalPage } from "@/legal/layout";
+import { legalPage, mailto } from "@/legal/layout";
 
 /**
  * The privacy policy, as served on /privacy.
@@ -70,6 +70,6 @@ time from the Telegram app: Settings → Devices → terminate the session.</p>
 </ul>
 
 <h2>Questions and deletion requests</h2>
-<p>Write to <a href="mailto:${env.CONTACT_EMAIL}">${env.CONTACT_EMAIL}</a>, or see
+<p>Write to ${mailto(env.CONTACT_EMAIL)}, or see
 the <a href="/contact">contact page</a>.</p>`,
   );

@@ -31,6 +31,25 @@ const navHtml = (current: LegalPageName): string =>
       : `<a href="/${name}">${label}</a>`,
   ).join(" · ");
 
+/**
+ * A mailto link Cloudflare will leave alone.
+ *
+ * Cloudflare's Scrape Shield rewrites any address it finds into a
+ * `/cdn-cgi/l/email-protection` link plus a `[email protected]` placeholder,
+ * restored in the browser by its own script. Measured on production
+ * 2026-08-28: the address then appears **nowhere** in the served HTML, so a
+ * visitor without JavaScript — and any crawler or reviewer that fetches the
+ * page rather than renders it — sees a placeholder and a link that 404s. On a
+ * contact page that exists to publish one address, that is the whole page
+ * failing.
+ *
+ * `<!--email_off-->` is Cloudflare's documented opt-out for a region of markup
+ * and needs no dashboard access, which is why it is done here rather than by
+ * turning the feature off account-wide.
+ */
+export const mailto = (address: string): string =>
+  `<!--email_off--><a href="mailto:${address}">${address}</a><!--/email_off-->`;
+
 export const legalPage = (
   current: LegalPageName,
   title: string,

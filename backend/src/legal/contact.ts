@@ -1,5 +1,5 @@
 import { env } from "@/env";
-import { legalPage } from "@/legal/layout";
+import { legalPage, mailto } from "@/legal/layout";
 
 /**
  * The /contact page.
@@ -14,7 +14,7 @@ export const contactHtml = (): string =>
     "contact",
     "Contact",
     `<h1>Contact</h1>
-<p>Write to <a href="mailto:${env.CONTACT_EMAIL}"><b>${env.CONTACT_EMAIL}</b></a>.
+<p>Write to <b>${mailto(env.CONTACT_EMAIL)}</b>.
 It reaches the operator of <b>${env.PUBLIC_BASE_URL}</b> directly.</p>
 
 <h2>What to write about</h2>
